@@ -1,0 +1,259 @@
+import { createContext, useContext } from 'react'
+
+// [zh, en, hu]
+const D = {
+  appName: ['面坊', 'Noodle Factory', 'Tésztaüzem'],
+  // nav
+  nav_dashboard: ['今日', 'Today', 'Mai nap'],
+  nav_orders: ['订单', 'Orders', 'Rendelések'],
+  nav_production: ['生产', 'Production', 'Gyártás'],
+  nav_deliveries: ['送货', 'Deliveries', 'Kiszállítás'],
+  nav_inventory: ['库存', 'Stock', 'Készlet'],
+  nav_purchasing: ['进货', 'Purchasing', 'Beszerzés'],
+  nav_products: ['产品与配方', 'Products & recipes', 'Termékek és receptek'],
+  nav_materials: ['原料', 'Raw materials', 'Alapanyagok'],
+  nav_suppliers: ['供应商', 'Suppliers', 'Beszállítók'],
+  nav_customers: ['客户', 'Customers', 'Ügyfelek'],
+  nav_users: ['账号', 'Accounts', 'Fiókok'],
+  nav_group_work: ['日常', 'Daily work', 'Napi munka'],
+  nav_group_setup: ['基础资料', 'Setup', 'Törzsadatok'],
+  // auth
+  email: ['邮箱', 'Email', 'E-mail'],
+  password: ['密码', 'Password', 'Jelszó'],
+  signIn: ['登录', 'Sign in', 'Belépés'],
+  signUp: ['注册', 'Create account', 'Fiók létrehozása'],
+  signOut: ['退出', 'Sign out', 'Kilépés'],
+  noAccount: ['还没有账号？注册', 'No account yet? Create one', 'Nincs még fiókja? Hozzon létre egyet'],
+  haveAccount: ['已有账号？登录', 'Already have an account? Sign in', 'Van már fiókja? Belépés'],
+  checkEmail: ['请到邮箱确认后再登录。', 'Confirm your email, then sign in.', 'Erősítse meg az e-mail-címét, majd lépjen be.'],
+  loginTagline: ['面条工厂后台与订货', 'Factory back office and wholesale ordering', 'Üzemi háttérrendszer és nagykereskedelmi rendelés'],
+  requestAccess: ['申请使用', 'Request access', 'Hozzáférés kérése'],
+  requestAccessHint: ['填写信息后，工厂管理员会为你开通。', 'Fill this in and the factory will activate your account.', 'Töltse ki, és az üzem aktiválja a fiókját.'],
+  yourName: ['姓名', 'Your name', 'Név'],
+  company: ['公司 / 餐厅', 'Company / restaurant', 'Cég / étterem'],
+  phone: ['电话', 'Phone', 'Telefon'],
+  send: ['提交', 'Send', 'Küldés'],
+  pendingTitle: ['等待开通', 'Waiting for activation', 'Aktiválásra vár'],
+  pendingText: ['申请已提交。开通后刷新页面即可使用。', 'Your request is in. Refresh this page once it has been activated.', 'A kérés elküldve. Aktiválás után frissítse az oldalt.'],
+  refresh: ['刷新', 'Refresh', 'Frissítés'],
+  // common
+  save: ['保存', 'Save', 'Mentés'],
+  cancel: ['取消', 'Cancel', 'Mégse'],
+  close: ['关闭', 'Close', 'Bezárás'],
+  add: ['新增', 'Add', 'Új'],
+  edit: ['编辑', 'Edit', 'Szerkesztés'],
+  delete: ['删除', 'Delete', 'Törlés'],
+  confirmDelete: ['确定删除？', 'Delete this?', 'Biztosan törli?'],
+  search: ['搜索', 'Search', 'Keresés'],
+  name: ['名称', 'Name', 'Név'],
+  name_zh: ['中文名', 'Chinese name', 'Kínai név'],
+  name_en: ['英文名', 'English name', 'Angol név'],
+  name_hu: ['匈语名', 'Hungarian name', 'Magyar név'],
+  code: ['编号', 'Code', 'Kód'],
+  category: ['分类', 'Category', 'Kategória'],
+  unit: ['单位', 'Unit', 'Egység'],
+  qty: ['数量', 'Qty', 'Mennyiség'],
+  price: ['单价', 'Unit price', 'Egységár'],
+  total: ['合计', 'Total', 'Összesen'],
+  notes: ['备注', 'Notes', 'Megjegyzés'],
+  date: ['日期', 'Date', 'Dátum'],
+  status: ['状态', 'Status', 'Állapot'],
+  active: ['启用', 'Active', 'Aktív'],
+  actions: ['操作', 'Actions', 'Műveletek'],
+  loading: ['加载中…', 'Loading…', 'Betöltés…'],
+  saved: ['已保存', 'Saved', 'Mentve'],
+  nothingYet: ['还没有内容', 'Nothing here yet', 'Még nincs itt semmi'],
+  all: ['全部', 'All', 'Mind'],
+  showInactive: ['显示停用', 'Show inactive', 'Inaktívak is'],
+  itemsN: ['{n} 种', '{n} items', '{n} tétel'],
+  print: ['打印', 'Print', 'Nyomtatás'],
+  lot: ['批号', 'Lot', 'Tétel'],
+  expiry: ['保质期至', 'Use by', 'Minőségmegőrzés'],
+  contact: ['联系人', 'Contact', 'Kapcsolattartó'],
+  address: ['地址', 'Address', 'Cím'],
+  // materials
+  minStock: ['最低库存', 'Minimum stock', 'Minimális készlet'],
+  costPerUnit: ['单位成本 (Ft)', 'Cost per unit (Ft)', 'Egységköltség (Ft)'],
+  defaultSupplier: ['默认供应商', 'Default supplier', 'Alapértelmezett beszállító'],
+  allergens: ['过敏原', 'Allergens', 'Allergének'],
+  allergensHint: ['用逗号分隔，如 gluten, egg', 'Comma separated, e.g. gluten, egg', 'Vesszővel elválasztva, pl. glutén, tojás'],
+  // products
+  description: ['描述', 'Description', 'Leírás'],
+  packSize: ['每份克数', 'Portion size (g)', 'Adag (g)'],
+  shelfLife: ['保质期 (天)', 'Shelf life (days)', 'Eltarthatóság (nap)'],
+  storage: ['储存条件', 'Storage', 'Tárolás'],
+  batchYield: ['每批产量', 'Yield per batch', 'Hozam / adag'],
+  basePrice: ['标准价 (Ft)', 'List price (Ft)', 'Listaár (Ft)'],
+  minOrder: ['最小起订量', 'Minimum order', 'Minimum rendelés'],
+  visibleToCustomers: ['客户可见可订', 'Customers can order it', 'Ügyfelek rendelhetik'],
+  recipe: ['配方', 'Recipe', 'Recept'],
+  recipeFor: ['每批用料', 'Ingredients per batch', 'Hozzávalók adagonként'],
+  addIngredient: ['加原料', 'Add ingredient', 'Hozzávaló hozzáadása'],
+  batchCost: ['每批成本', 'Batch cost', 'Adag költsége'],
+  unitCost: ['单位成本', 'Cost per unit', 'Egységköltség'],
+  margin: ['毛利率', 'Margin', 'Árrés'],
+  noRecipe: ['还没有配方，加原料开始。', 'No recipe yet. Add an ingredient to start.', 'Még nincs recept. Adjon hozzá egy hozzávalót.'],
+  // purchasing
+  newPO: ['新建进货单', 'New purchase order', 'Új beszerzési rendelés'],
+  supplier: ['供应商', 'Supplier', 'Beszállító'],
+  expected: ['预计到货', 'Expected', 'Várható érkezés'],
+  receive: ['收货入库', 'Receive', 'Bevételezés'],
+  received: ['已收', 'Received', 'Beérkezett'],
+  markOrdered: ['标记已下单', 'Mark as ordered', 'Megrendeltnek jelöl'],
+  po_draft: ['草稿', 'Draft', 'Piszkozat'],
+  po_ordered: ['已下单', 'Ordered', 'Megrendelve'],
+  po_received: ['已入库', 'Received', 'Bevételezve'],
+  po_cancelled: ['已取消', 'Cancelled', 'Törölve'],
+  addLine: ['加一行', 'Add line', 'Sor hozzáadása'],
+  suggestReorder: ['低于最低库存的原料', 'Below minimum stock', 'Minimum készlet alatt'],
+  addToPO: ['加入进货单', 'Add to a purchase order', 'Beszerzéshez ad'],
+  // inventory
+  onHand: ['现有', 'On hand', 'Készleten'],
+  reserved: ['已被订', 'Ordered', 'Lefoglalva'],
+  available: ['可用', 'Available', 'Szabad'],
+  materialsTab: ['原料库存', 'Raw materials', 'Alapanyagok'],
+  productsTab: ['成品库存', 'Finished goods', 'Késztermékek'],
+  movementsTab: ['出入库记录', 'Movements', 'Mozgások'],
+  adjust: ['盘点 / 调整', 'Count / adjust', 'Leltár / korrekció'],
+  newCount: ['盘点后实际数量', 'Counted quantity', 'Megszámolt mennyiség'],
+  waste: ['报损', 'Write off', 'Selejtezés'],
+  belowMin: ['不足', 'Low', 'Kevés'],
+  reason: ['类型', 'Type', 'Típus'],
+  r_purchase: ['进货', 'Purchase', 'Beszerzés'],
+  r_production_use: ['生产用料', 'Used in production', 'Gyártásba felhasználva'],
+  r_production_out: ['生产入库', 'Produced', 'Legyártva'],
+  r_delivery: ['送货出库', 'Delivered', 'Kiszállítva'],
+  r_adjust: ['调整', 'Adjustment', 'Korrekció'],
+  r_waste: ['报损', 'Write-off', 'Selejt'],
+  r_count: ['盘点', 'Stock count', 'Leltár'],
+  item: ['品项', 'Item', 'Tétel'],
+  // production
+  plan: ['生产计划', 'Production plan', 'Gyártási terv'],
+  demand: ['订单需求', 'Ordered', 'Megrendelve'],
+  toMake: ['需生产', 'To make', 'Gyártandó'],
+  batches: ['批数', 'Batches', 'Adagok'],
+  planBatch: ['排生产', 'Plan batch', 'Gyártás tervezése'],
+  finish: ['完成生产', 'Finish batch', 'Gyártás lezárása'],
+  actualQty: ['实际产量', 'Actual yield', 'Tényleges hozam'],
+  expectedQty: ['预计产量', 'Expected yield', 'Várható hozam'],
+  materialsNeeded: ['所需原料', 'Materials needed', 'Szükséges alapanyag'],
+  short: ['缺', 'short', 'hiány'],
+  b_planned: ['待生产', 'Planned', 'Tervezett'],
+  b_done: ['已完成', 'Done', 'Kész'],
+  b_cancelled: ['已取消', 'Cancelled', 'Törölve'],
+  forDate: ['交货日', 'For delivery on', 'Szállítási nap'],
+  // customers
+  newCustomer: ['新客户', 'New customer', 'Új ügyfél'],
+  ctype: ['类型', 'Type', 'Típus'],
+  internal: ['自家餐厅', 'Own restaurant', 'Saját étterem'],
+  wholesale: ['外部批发', 'Wholesale', 'Nagyker'],
+  vatNo: ['税号', 'VAT number', 'Adószám'],
+  deliveryNotes: ['送货备注', 'Delivery notes', 'Szállítási megjegyzés'],
+  prices: ['专属价格', 'Customer prices', 'Egyedi árak'],
+  pricesHint: ['留空则用标准价。', 'Leave empty to use the list price.', 'Üresen hagyva a listaár érvényes.'],
+  ramenLead: ['拉面馆名单 place_id', 'Ramen lead place_id', 'Ramen lead place_id'],
+  // orders
+  newOrder: ['代客下单', 'New order for a customer', 'Új rendelés ügyfélnek'],
+  customer: ['客户', 'Customer', 'Ügyfél'],
+  deliveryDate: ['送货日期', 'Delivery date', 'Szállítás napja'],
+  o_submitted: ['新订单', 'New', 'Új'],
+  o_confirmed: ['已确认', 'Confirmed', 'Visszaigazolva'],
+  o_ready: ['已备好', 'Ready', 'Összekészítve'],
+  o_delivered: ['已送达', 'Delivered', 'Kiszállítva'],
+  o_cancelled: ['已取消', 'Cancelled', 'Törölve'],
+  openOrders: ['进行中', 'Open', 'Folyamatban'],
+  confirm: ['确认订单', 'Confirm order', 'Visszaigazolás'],
+  markReady: ['标记备好', 'Mark ready', 'Összekészítve'],
+  cancelOrder: ['取消订单', 'Cancel order', 'Rendelés törlése'],
+  orderNo: ['单号', 'Order', 'Rendelés'],
+  lines: ['明细', 'Items', 'Tételek'],
+  // deliveries
+  newDelivery: ['新建送货单', 'New delivery run', 'Új kiszállítás'],
+  driver: ['司机', 'Driver', 'Sofőr'],
+  vehicle: ['车辆', 'Vehicle', 'Jármű'],
+  d_planned: ['待出发', 'Planned', 'Tervezett'],
+  d_out: ['送货中', 'On the road', 'Úton'],
+  d_done: ['已完成', 'Done', 'Kész'],
+  depart: ['出发', 'Start run', 'Indulás'],
+  completeDelivery: ['全部送达', 'Mark all delivered', 'Mind kiszállítva'],
+  unassigned: ['未安排送货的订单', 'Orders not on a run yet', 'Még be nem osztott rendelések'],
+  assign: ['加入此趟', 'Add to this run', 'Hozzáadás'],
+  remove: ['移出', 'Remove', 'Eltávolítás'],
+  deliveryNote: ['送货单', 'Delivery note', 'Szállítólevél'],
+  signature: ['签收', 'Received by', 'Átvette'],
+  stops: ['站', 'stops', 'cím'],
+  // users
+  role: ['角色', 'Role', 'Szerepkör'],
+  role_admin: ['管理员', 'Admin', 'Admin'],
+  role_staff: ['员工', 'Staff', 'Munkatárs'],
+  role_restaurant: ['内部餐厅', 'Own restaurant', 'Saját étterem'],
+  role_customer: ['外部客户', 'Wholesale customer', 'Nagyker ügyfél'],
+  role_pending: ['待开通', 'Waiting', 'Várakozik'],
+  linkCustomer: ['对应客户', 'Linked customer', 'Kapcsolt ügyfél'],
+  usersHint: ['新用户在本系统注册并提交申请后会出现在这里。「内部餐厅」账号只能下单、看不到价格、下单直接确认，要对应一家自家餐厅；「外部客户」账号要对应一个外部批发客户。', 'People appear here after they create an account in this app and request access. An Own restaurant account can only place orders, never sees prices, and its orders are confirmed at once; link it to one of your restaurants. A Wholesale customer account must be linked to a wholesale customer.', 'A felhasználók akkor jelennek meg, ha fiókot hoznak létre és hozzáférést kérnek. A Saját étterem fiók csak rendelni tud, árakat nem lát, a rendelései azonnal visszaigazolódnak; saját étteremhez kell kapcsolni. A Nagyker ügyfél fiókot nagykereskedelmi ügyfélhez kell kapcsolni.'],
+  // dashboard
+  todayDeliveries: ['今天送货', 'Delivering today', 'Ma kiszállítandó'],
+  tomorrowOrders: ['明天的订单', 'Orders for tomorrow', 'Holnapi rendelések'],
+  pendingAccounts: ['待开通账号', 'Accounts waiting for approval', 'Jóváhagyásra váró fiókok'],
+  newOrders: ['待确认订单', 'Orders to confirm', 'Visszaigazolandó rendelések'],
+  lowStock: ['原料不足', 'Low raw materials', 'Kevés alapanyag'],
+  openBatches: ['待生产批次', 'Batches to make', 'Gyártandó adagok'],
+  openPOs: ['在途进货', 'Purchases on the way', 'Úton lévő beszerzések'],
+  allGood: ['都正常', 'All fine', 'Minden rendben'],
+  // portal
+  portalOrder: ['下单', 'Order', 'Rendelés'],
+  portalHistory: ['我的订单', 'My orders', 'Rendeléseim'],
+  placeOrder: ['提交订单', 'Place order', 'Rendelés leadása'],
+  orderPlacedInternal: ['订单已提交并确认，工厂会按日期送货。', 'Order placed and confirmed. The factory will deliver on the chosen date.', 'Rendelés leadva és visszaigazolva. Az üzem a kiválasztott napon szállít.'],
+  internalOrderNote: ['提交后直接确认', 'Confirmed as soon as you place it', 'Leadás után azonnal visszaigazolva'],
+  orderPlaced: ['订单已提交，工厂确认后会安排生产送货。', 'Order placed. The factory will confirm it and schedule delivery.', 'Rendelés leadva. Az üzem visszaigazolja és ütemezi a szállítást.'],
+  minOrderNote: ['起订', 'min.', 'min.'],
+  emptyCart: ['选择数量后提交订单', 'Set quantities to place an order', 'Adja meg a mennyiségeket'],
+  noPayment: ['货到后按发票结算', 'Invoiced after delivery', 'Számla a kiszállítás után'],
+  orderAgain: ['再来一单', 'Order the same again', 'Újrarendelés'],
+  noCustomerLink: ['你的账号还没有对应客户，请联系工厂。', 'Your account is not linked to a customer yet. Please contact the factory.', 'A fiókja még nincs ügyfélhez kapcsolva. Kérjük, vegye fel a kapcsolatot az üzemmel.'],
+}
+
+export const LANGS = [
+  { code: 'hu', label: 'HU' },
+  { code: 'en', label: 'EN' },
+  { code: 'zh', label: '中文' },
+]
+const IDX = { zh: 0, en: 1, hu: 2 }
+
+export function translate(lang, key, vars) {
+  const row = D[key]
+  let s = row ? (row[IDX[lang] ?? 0] || row[1] || row[0]) : key
+  if (vars) for (const k in vars) s = s.replace(`{${k}}`, vars[k])
+  return s
+}
+
+// pick the right name column from a row with name_zh / name_en / name_hu
+export function pickName(lang, row) {
+  if (!row) return ''
+  return row[`name_${lang}`] || row.name_zh || row.name_en || row.name_hu || row.name || ''
+}
+
+export const LangContext = createContext({ lang: 'hu', setLang: () => {} })
+export function useT() {
+  const { lang } = useContext(LangContext)
+  const t = (k, v) => translate(lang, k, v)
+  t.lang = lang
+  t.pick = row => pickName(lang, row)
+  return t
+}
+
+const LOCALE = { zh: 'zh-CN', en: 'en-GB', hu: 'hu-HU' }
+export function fmtNum(n, lang, digits = 2) {
+  if (n === null || n === undefined || n === '') return '–'
+  return Number(n).toLocaleString(LOCALE[lang], { maximumFractionDigits: digits })
+}
+export function fmtFt(n, lang) {
+  if (n === null || n === undefined) return '–'
+  return Number(n).toLocaleString(LOCALE[lang], { maximumFractionDigits: 0 }) + ' Ft'
+}
+export function fmtDate(d, lang) {
+  if (!d) return '–'
+  const x = typeof d === 'string' && d.length === 10 ? new Date(d + 'T00:00:00') : new Date(d)
+  return x.toLocaleDateString(LOCALE[lang], { month: 'short', day: 'numeric', weekday: 'short' })
+}
