@@ -16,7 +16,7 @@ export default function Portal() {
     const [me, catalog, orders] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
-      q(db.from('orders').select('*, order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
     ])
     return { me, catalog, orders }
   })
