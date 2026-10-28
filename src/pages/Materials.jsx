@@ -12,7 +12,7 @@ export default function Materials() {
   return (
     <CrudPage table="materials" title={t('nav_materials')} order="name_zh"
       searchKeys={['name_zh', 'name_en', 'name_hu', 'code', 'category']}
-      defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0 }}
+      defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true }}
       columns={[
         { key: 'code', label: t('code') },
         { key: 'name', label: t('name'), render: r => <b>{t.pick(r)}</b> },
@@ -33,6 +33,7 @@ export default function Materials() {
         { key: 'min_stock', label: t('minStock'), type: 'number' },
         { key: 'default_supplier_id', label: t('defaultSupplier'), type: 'select', options: (suppliers || []).map(s => [s.id, s.name]) },
         { key: 'allergens', label: t('allergens'), type: 'tags', hint: t('allergensHint') },
+        { key: 'on_label', label: t('onLabel'), type: 'bool' },
         { key: 'active', label: t('active'), type: 'bool' },
       ]} />
   )

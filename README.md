@@ -14,6 +14,8 @@
 | 送货 | 新建送货：选客户自动带出地址、电话、联系人、送货备注，选货品时能看到库存；按送货趟（司机/车辆）分组，装车清单；确认送达时可改实送数量、填签收人、拍照上传签收凭证（只给内部看，可下载）；按实送数量自动扣成品库存；打印单张或整趟送货单 |
 | 库存 | 原料/成品现有量、最低库存提醒、盘点、报损、完整出入库记录 |
 | 进货 | 进货单（草稿 → 已下单 → 收货入库），低于最低库存的原料一键生成进货单；收货时填批号和保质期，并更新原料成本 |
+| 标签打印 | 完成生产时（或之后从批次列表/追溯页）打印 Brother QL-810W 标签：品名、净含量、批号、生产日期、保质期、储存条件、配料表（按重量排序，过敏原加粗；包装材料不印）、生产商、二维码。尺寸可选 DK-22205/11209/11202/11201/11208 或自定义，标签语言可选；生产商信息管理员在打印窗口里填写 |
+| 批次追溯 | 扫标签二维码打开 `/trace/批号`：生产时间、产量、保质期、所用原料及生产前最近一次进货批号 |
 | 产品与配方 | 产品三语名称、规格、保质期、标准价；每批用料配方，自动算每批成本、单位成本、毛利率 |
 | 原料 / 供应商 | 基础资料，原料带过敏原 |
 | 客户 | 自家餐厅 / 外部批发；每个客户可设专属价格（管理员）；可关联拉面馆名单 `sales.ramen_leads` 的 place_id |
@@ -35,7 +37,7 @@
 
 1. **建表**：Supabase → SQL Editor，运行 `supabase/001_noodle_schema.sql`
 2. **开放 schema**：Settings → API → Exposed schemas，加上 `noodle`（和之前的 `ordering` 一样）
-3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`
+3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`
 4. （可选）运行 `supabase/002_demo_data.sql` 装演示数据，文件底部有一键删除的 SQL
 5. **本地运行**：
    ```

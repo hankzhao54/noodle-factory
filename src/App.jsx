@@ -18,6 +18,7 @@ import Orders from './pages/Orders'
 import Deliveries from './pages/Deliveries'
 import Users from './pages/Users'
 import Portal from './portal/Portal'
+import Trace from './pages/Trace'
 
 export default function App() {
   const [lang, setLangState] = useState(() => localStorage.getItem('nf-lang') || 'hu')
@@ -116,6 +117,7 @@ function StaffShell() {
           <Route path="/materials" element={<Materials />} />
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/trace/:lot" element={<Trace />} />
           {isAdmin && <Route path="/users" element={<Users />} />}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

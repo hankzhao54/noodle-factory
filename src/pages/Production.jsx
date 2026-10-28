@@ -3,6 +3,8 @@ import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
+import { Link } from 'react-router-dom'
+import LabelPrint from '../components/LabelPrint'
 
 export default function Production() {
   const t = useT()
@@ -11,6 +13,7 @@ export default function Production() {
   const [tab, setTab] = useState('planned')
   const [finishing, setFinishing] = useState(null)
   const [adding, setAdding] = useState(null)
+  const [labelFor, setLabelFor] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
     const [products, recipe, mstock, pstock, demand, batches] = await Promise.all([
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,sort').eq('active', true).order('sort')),
@@ -116,9 +119,9 @@ export default function Production() {
                 <td className="num">{fmtNum(b.batches, t.lang)}</td>
                 <td className="num muted">{fmtNum(b.batches * (p.batch_yield || 0), t.lang)} {p.unit}</td>
                 <td className="num">{b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–'}</td>
-                <td className="muted">{b.lot_no || '–'}</td>
+                <td className="muted">{b.lot_no ? <Link to={`/trace/${encodeURIComponent(b.lot_no)}`}>{b.lot_no}</Link> : '–'}</td>
                 <td><Status value={b.status} prefix="b" /></td>
-                <td className="act">{b.status === 'planned' && <>
+                <td className="act">{b.status === 'done' && <button className="btn btn-sm" onClick={() => setLabelFor(b.id)}>{t('printLabels')}</button>}{b.status === 'planned' && <>
                   <button className="btn btn-quiet" onClick={() => cancelBatch(b)}>{t('cancel')}</button>
                   <button className="btn btn-sm btn-primary" onClick={() => setFinishing(b)}>{t('finish')}</button>
                 </>}</td>
@@ -129,7 +132,8 @@ export default function Production() {
       )}
 
       {adding && <AddBatch init={adding} products={data.products} onClose={() => setAdding(null)} onDone={() => { setAdding(null); reload() }} />}
-      {finishing && <Finish batch={finishing} product={prod(finishing.product_id)} onClose={() => setFinishing(null)} onDone={() => { setFinishing(null); reload() }} />}
+      {finishing && <Finish batch={finishing} product={prod(finishing.product_id)} onClose={() => setFinishing(null)} onDone={print => { const id = finishing.id; setFinishing(null); reload(); if (print) setLabelFor(id) }} />}
+      {labelFor && <LabelPrint batchId={labelFor} onClose={() => setLabelFor(null)} />}
     </div>
   )
 }
@@ -170,11 +174,12 @@ function Finish({ batch, product, onClose, onDone }) {
   const toast = useToast()
   const [qty, setQty] = useState(batch.batches * (product.batch_yield || 0))
   const [lot, setLot] = useState('')
+  const [printAfter, setPrintAfter] = useState(true)
   async function save(e) {
     e.preventDefault()
     try {
       await q(db.rpc('complete_production', { p_batch_id: batch.id, p_actual_qty: qty, p_lot_no: lot || null }))
-      toast(t('b_done')); onDone()
+      toast(t('b_done')); onDone(printAfter)
     } catch (err) { toast(errText(err), 'error') }
   }
   return (
@@ -185,6 +190,7 @@ function Finish({ batch, product, onClose, onDone }) {
           <NumInput value={qty} onChange={setQty} required min={0} />
         </Field>
         <Field label={t('lot')} hint="YYMMDD-#"><input value={lot} onChange={e => setLot(e.target.value)} /></Field>
+        <label className="check-inline"><input type="checkbox" checked={printAfter} onChange={e => setPrintAfter(e.target.checked)} />{t('printAfterFinish')}</label>
         <div className="modal-foot"><span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
           <button className="btn btn-primary">{t('finish')}</button></div>
