@@ -13,8 +13,11 @@ export default function Login() {
 
   async function submit(e) {
     e.preventDefault(); setBusy(true); setMsg(null)
-    const fn = mode === 'in' ? supabase.auth.signInWithPassword : supabase.auth.signUp
-    const { data, error } = await fn.call(supabase.auth, { email, password })
+    // emailRedirectTo: the confirmation link must come back to this app,
+    // not to the shared Supabase "Site URL" (used by the other apps)
+    const { data, error } = mode === 'in'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
     setBusy(false)
     if (error) setMsg({ kind: 'error', text: error.message })
     else if (mode === 'up' && !data.session) setMsg({ kind: 'ok', text: t('checkEmail') })
