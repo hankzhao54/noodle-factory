@@ -340,7 +340,11 @@ export function Label(props) {
 /* ---- simple label drawn straight onto a canvas (what you see = what prints) ---- */
 const DPI = 300
 const PX_PER_MM = DPI / 25.4
-const FONT = 'Archivo, "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+const FONT = '"Archivo Variable", Archivo, "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+// make sure the faces the canvas uses are loaded before drawing
+export const labelFontsReady = () => Promise.all([
+  'condensed 500 40px "Archivo Variable"', 'condensed 700 40px "Archivo Variable"',
+].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
 function simpleLines({ product, batch, expiry, lang, recorder, amount, unit, labelId }) {
   const T = L[lang] || L.hu
@@ -365,25 +369,26 @@ export function drawSimpleLabel(props) {
   const g = c.getContext('2d')
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H)
   g.fillStyle = '#000'
-  const pad = 1.8 * PX_PER_MM, gap = 1.6 * PX_PER_MM
+  const pad = 1.0 * PX_PER_MM, gap = 1.4 * PX_PER_MM
 
   // QR: whole-pixel modules so it stays sharp on a 300 dpi head
   const qr = QRCode.create(traceUrl(lot), { errorCorrectionLevel: 'M' })
   const n = qr.modules.size
-  const cell = Math.max(1, Math.floor((Math.min(h * 0.72, w * 0.3) * PX_PER_MM) / n))
+  // like the OkoHACCP labels: a modest QR, the rest of the label for large text
+  const cell = Math.max(1, Math.floor((Math.min(h * 0.6, w * 0.27, h - 2) * PX_PER_MM) / n))
   const qrPx = cell * n
   const qx = Math.round(pad), qy = Math.round((H - qrPx) / 2)
   for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
     if (qr.modules.data[r * n + col]) g.fillRect(qx + col * cell, qy + r * cell, cell, cell)
   }
 
-  // text: biggest size (≤ 9 pt) at which every line fits
+  // text: the biggest size at which every line fits (condensed face, like the OkoHACCP font)
   const x0 = qx + qrPx + gap, maxW = W - x0 - pad, maxH = H - 2 * pad
   const lines = simpleLines(props)
-  const fontOf = (l, px) => `${l.bold ? 700 : 400} ${l.bold ? px * 1.08 : px}px ${FONT}`
-  let pt = 9, px, lh
+  const fontOf = (l, px) => `condensed ${l.bold ? 700 : 500} ${l.bold ? px * 1.05 : px}px ${FONT}`
+  let pt = 16, px, lh
   for (; pt >= 4.5; pt = Math.round((pt - 0.2) * 10) / 10) {
-    px = pt * DPI / 72; lh = px * 1.2
+    px = pt * DPI / 72; lh = px * 1.16
     const widest = Math.max(...lines.map(l => { g.font = fontOf(l, px); return g.measureText(l.text).width }))
     if (widest <= maxW && lines.length * lh <= maxH) break
   }
@@ -396,7 +401,7 @@ export function drawSimpleLabel(props) {
 function CanvasPreview(props) {
   const [src, setSrc] = useState('')
   const [fontTick, setFontTick] = useState(0)
-  useEffect(() => { document.fonts?.ready?.then(() => setFontTick(x => x + 1)) }, [])
+  useEffect(() => { labelFontsReady().then(() => setFontTick(x => x + 1)) }, [])
   const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, fontTick])
   useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
   return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
