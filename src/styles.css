@@ -276,6 +276,9 @@ textarea { resize: vertical; }
 .label-ingr > span:first-child { color: #333; }
 .label-producer-line { margin: 0; font-size: 5.8pt; color: #333; }
 .label-wide { align-items: center; padding: 1.5mm 2.5mm; }
+.label-simple { align-items: center; gap: 1.5mm; padding: 1.5mm 1.8mm; }
+.label-lines { flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; min-width: 0; overflow: hidden; line-height: 1.18; white-space: nowrap; font-stretch: 90%; }
+.label-lines b { font-size: 1.08em; font-weight: 700; }
 .label-tall { flex-direction: column; gap: 3mm; padding: 4mm; font-size: 8.5pt; }
 .label-tall .label-name { font-size: 16pt; }
 .label-tall .label-grid { gap: 0.6mm 3mm; }
