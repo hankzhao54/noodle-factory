@@ -33,7 +33,7 @@ export default function Inventory() {
             <tbody>{data.materials.filter(match).map(m => (
               <tr key={m.id} className={m.below_min ? 'row-low' : ''}>
                 <td><b>{t.pick(m)}</b>{m.below_min && <span className="tag tag-low">{t('belowMin')}</span>}</td>
-                <td className="muted hide-sm">{m.category || '–'}</td>
+                <td className="muted hide-sm">{t.cat(m.category) || '–'}</td>
                 <td className="strand-col"><Strand value={m.on_hand} min={m.min_stock} unit={m.unit} /></td>
                 <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span></td>
                 <td className="num muted">{fmtNum(m.min_stock, t.lang)}</td>

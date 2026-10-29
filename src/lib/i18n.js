@@ -227,6 +227,7 @@ const D = {
   recorder: ['记录人', 'Recorded by', 'Rögzítő'],
   qtyPerLabel: ['每张标签数量', 'Quantity per label', 'Mennyiség címkénként'],
   copiesIdHint: ['编号 {a} 到 {b}', 'IDs {a} to {b}', 'Azonosítók: {a} – {b}'],
+  categoryHint: ['可以选常用分类，也可以自己写；常用分类会按界面语言显示。', 'Pick a common category or type your own; common ones follow the interface language.', 'Válasszon gyakori kategóriát vagy írjon sajátot; a gyakoriak a felület nyelvén jelennek meg.'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
@@ -289,6 +290,25 @@ const D = {
   noCustomerLink: ['你的账号还没有对应客户，请联系工厂。', 'Your account is not linked to a customer yet. Please contact the factory.', 'A fiókja még nincs ügyfélhez kapcsolva. Kérjük, vegye fel a kapcsolatot az üzemmel.'],
 }
 
+// Raw-material categories are typed freely; the common ones are shown in the current language.
+// Each row: [zh, en, hu] — typing any of the three spellings counts.
+const CATEGORIES = [
+  ['面粉', 'Flour', 'Liszt'],
+  ['淀粉', 'Starch', 'Keményítő'],
+  ['辅料', 'Other ingredients', 'Egyéb alapanyag'],
+  ['蛋', 'Egg', 'Tojás'],
+  ['包装', 'Packaging', 'Csomagolás'],
+  ['调味料', 'Seasoning', 'Fűszer'],
+  ['油', 'Oil', 'Olaj'],
+]
+export function categoryName(lang, value) {
+  if (!value) return ''
+  const v = String(value).trim().toLowerCase()
+  const row = CATEGORIES.find(r => r.some(x => x.toLowerCase() === v))
+  return row ? row[IDX[lang] ?? 2] : value
+}
+export const categoryOptions = lang => CATEGORIES.map(r => r[IDX[lang] ?? 2])
+
 export const LANGS = [
   { code: 'hu', label: 'HU' },
   { code: 'en', label: 'EN' },
@@ -315,6 +335,7 @@ export function useT() {
   const t = (k, v) => translate(lang, k, v)
   t.lang = lang
   t.pick = row => pickName(lang, row)
+  t.cat = value => categoryName(lang, value)
   return t
 }
 
