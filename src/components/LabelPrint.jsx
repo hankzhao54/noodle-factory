@@ -44,6 +44,17 @@ function allergenName(raw, lang) {
 // rough weight for ordering the ingredient list (heaviest first)
 const KG = { kg: 1, g: 0.001, l: 1, ml: 0.001 }
 const toKg = l => Number(l.qty_per_batch) * (KG[l.materials?.unit] ?? 1)
+// shelf life in days: the product's own value, else the default from Címke beállítások
+export function shelfDays(product, settings) {
+  if (product?.shelf_life_days != null && product.shelf_life_days !== '') return Number(product.shelf_life_days)
+  const d = settings?.label_default_shelf_days
+  return d !== undefined && d !== null && d !== '' && !isNaN(Number(d)) ? Number(d) : null
+}
+// calendar days, so the clock time stays the same across summer/winter time changes
+const addDays = (from, days) => {
+  if (!from || days == null) return null
+  const d = new Date(from); d.setDate(d.getDate() + days); return d
+}
 const nameIn = (row, lang) => row?.[`name_${lang}`] || row?.name_hu || row?.name_en || row?.name_zh || ''
 const ymd = d => {
   if (!d) return ''
@@ -95,12 +106,15 @@ export default function LabelPrint({ batchId, onClose }) {
   }, [batchId])
 
   useEffect(() => { if (data && !settings) setSettings(data.cfg) }, [data, settings])
-  // default quantity per label: the product's portion size, else the whole batch
+  // default quantity per label, in kg: the product's preset (Címke beállítások),
+  // else the general default, else the portion size, else the whole batch
   useEffect(() => {
     if (!data || amount !== null) return
-    const p = data.product
-    if (p.pack_size_g) { setAmount(Number(p.pack_size_g)); setUnit('g') }
-    else { setAmount(Number(data.batch.actual_qty) || 1); setUnit(p.unit === 'kg' ? 'kg' : p.unit === 'g' ? 'g' : 'pcs') }
+    const p = data.product, cfg = data.cfg
+    const num = v => (v !== null && v !== undefined && v !== '' && !isNaN(Number(v)) ? Number(v) : null)
+    const kg = num(p.label_qty_kg) ?? num(cfg.label_default_qty_kg)
+      ?? (p.pack_size_g ? Number(p.pack_size_g) / 1000 : null) ?? (Number(data.batch.actual_qty) || 1)
+    setAmount(kg); setUnit('kg')
   }, [data, amount])
   const lot = data?.batch.lot_no || ''
   useEffect(() => {
@@ -263,6 +277,10 @@ export default function LabelPrint({ batchId, onClose }) {
           {simple ? <>
             <label className="check-inline"><input type="checkbox" checked={!!opt.showQr} onChange={e => set({ showQr: e.target.checked })} />{t('showQr')}</label>
             <Field label={t('recorder')}><input value={recorder} onChange={e => setRecorder(e.target.value)} /></Field>
+            <p className="muted small">
+              {t('useByFrom', { n: shelfDays(data.product, settings) ?? '–' })}{' '}
+              <a href="/label-settings">{t('nav_labelSettings')}</a>
+            </p>
             <Field label={t('qtyPerLabel')}>
               <div className="row-gap nowrap">
                 <NumInput value={amount} min={0} onChange={setAmount} style={{ flex: 1 }} />
@@ -347,11 +365,10 @@ export const labelFontsReady = () => Promise.all([
   'condensed 500 40px "Archivo Variable"', 'condensed 700 40px "Archivo Variable"',
 ].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
-function simpleLines({ product, batch, expiry, lang, recorder, amount, unit, labelId }) {
+function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId }) {
   const T = L[lang] || L.hu
   const produced = batch.done_at || batch.planned_date
-  const useBy = product.shelf_life_days != null && produced
-    ? new Date(new Date(produced).getTime() + product.shelf_life_days * 864e5) : expiry
+  const useBy = addDays(produced, shelfDays(product, settings)) || expiry
   return [
     { text: nameIn(product, lang), bold: true },
     { text: `${T.id}: ${labelId}` },
@@ -412,12 +429,10 @@ function CanvasPreview(props) {
 }
 
 /* same layout as the OkoHACCP labels: QR left, six lines right */
-function SimpleLabel({ product, batch, expiry, qr, lang, w, h, recorder, amount, unit, labelId, measure, fitPt, onFit }) {
+function SimpleLabel({ product, batch, expiry, settings, qr, lang, w, h, recorder, amount, unit, labelId, measure, fitPt, onFit }) {
   const T = L[lang] || L.hu
   const produced = batch.done_at || batch.planned_date
-  const useBy = product.shelf_life_days != null && produced
-    ? new Date(new Date(produced).getTime() + product.shelf_life_days * 864e5)
-    : expiry
+  const useBy = addDays(produced, shelfDays(product, settings)) || expiry
   const qrSize = Math.min(h * 0.72, w * 0.3)
   // shrink the text until every line fits (never cut off a date)
   // Only the on-screen preview can be measured (print copies are hidden), so it finds
@@ -458,8 +473,7 @@ function FullLabel({ product, lines, batch, expiry, lot, qr, settings, lang, ing
   const T = L[lang] || L.hu
   const wide = w / h > 2.2 || h < 35   // short labels (29×90, 62×29): compact, allergens only
   const produced = batch.done_at || batch.planned_date
-  const useBy = expiry || (product.shelf_life_days != null && produced
-    ? new Date(new Date(produced).getTime() + product.shelf_life_days * 864e5) : null)
+  const useBy = addDays(produced, shelfDays(product, settings)) || expiry
 
   const sorted = useMemo(() => lines
     .filter(l => l.materials?.on_label !== false)

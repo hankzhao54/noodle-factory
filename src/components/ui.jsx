@@ -132,7 +132,7 @@ export function NumInput({ value, onChange, ...rest }) {
 export function BlurNum({ value, onCommit, ...rest }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
-  const commit = () => { if (v !== value && v !== null) onCommit(v) }
+  const commit = () => { if (v !== value && !(v === null && (value === null || value === undefined))) onCommit(v) }
   return (
     <NumInput {...rest} value={v} onChange={setV} onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
