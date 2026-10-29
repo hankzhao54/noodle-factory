@@ -4,6 +4,8 @@
 
 界面：Magyar（默认）/ English / 中文
 
+网址：**https://noodle.101bistro.hu**（Vercel，DNS 在 MagyarHosting 用 CNAME 指向 Vercel；旧地址 noodle-factory-gamma.vercel.app 仍可用）。Supabase → Authentication → Redirect URLs 需包含 `https://noodle.101bistro.hu/**`。
+
 ## 功能
 
 | 模块 | 做什么 |
