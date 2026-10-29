@@ -215,6 +215,7 @@ const D = {
   labelTemplate: ['标签样式', 'Label style', 'Címke típusa'],
   templateSimple: ['简洁（同 OkoHACCP）', 'Simple (like OkoHACCP)', 'Egyszerű (mint az OkoHACCP)'],
   templateFull: ['完整（配料表、生产商）', 'Full (ingredients, producer)', 'Teljes (összetevők, gyártó)'],
+  showQr: ['印二维码（扫码查批次记录）', 'Print QR code (scan to open the batch record)', 'QR-kód nyomtatása (a tétel adatlapjához)'],
   recorder: ['记录人', 'Recorded by', 'Rögzítő'],
   qtyPerLabel: ['每张标签数量', 'Quantity per label', 'Mennyiség címkénként'],
   copiesIdHint: ['编号 {a} 到 {b}', 'IDs {a} to {b}', 'Azonosítók: {a} – {b}'],

@@ -67,8 +67,8 @@ export default function LabelPrint({ batchId, onClose }) {
   const toast = useToast()
   const { isAdmin, profile } = useAuth()
   const [opt, setOpt] = useState(() => ({
-    size: 'dk22205', length: 28, lang: 'hu', ingredients: true, cw: 62, ch: 28, template: 'simple',
-    ...read('nf-label-v2', {}),
+    size: 'dk22205', length: 32, lang: 'hu', ingredients: true, cw: 62, ch: 32, template: 'simple', showQr: false,
+    ...read('nf-label-v3', {}),
   }))
   const [recorder, setRecorder] = useState(profile?.display_name || '')
   const [amount, setAmount] = useState(null)
@@ -81,7 +81,7 @@ export default function LabelPrint({ batchId, onClose }) {
   const renderBox = useRef(null)
   const [qr, setQr] = useState('')
   const [settings, setSettings] = useState(null)
-  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v2', n); return n })
+  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v3', n); return n })
 
   const { data, error } = useData(async () => {
     const batch = await q(db.from('production_batches').select('*').eq('id', batchId).single())
@@ -231,7 +231,7 @@ export default function LabelPrint({ batchId, onClose }) {
 
   const simple = opt.template === 'simple'
   const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h,
-                  simple, recorder, amount, unit }
+                  simple, recorder, amount, unit, showQr: !!opt.showQr }
   const idFor = i => copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
   const scale = Math.min(1.8, 300 / w)
 
@@ -261,6 +261,7 @@ export default function LabelPrint({ batchId, onClose }) {
             </select>
           </Field>
           {simple ? <>
+            <label className="check-inline"><input type="checkbox" checked={!!opt.showQr} onChange={e => set({ showQr: e.target.checked })} />{t('showQr')}</label>
             <Field label={t('recorder')}><input value={recorder} onChange={e => setRecorder(e.target.value)} /></Field>
             <Field label={t('qtyPerLabel')}>
               <div className="row-gap nowrap">
@@ -371,22 +372,25 @@ export function drawSimpleLabel(props) {
   g.fillStyle = '#000'
   const pad = 1.0 * PX_PER_MM, gap = 1.4 * PX_PER_MM
 
-  // QR: whole-pixel modules so it stays sharp on a 300 dpi head
-  const qr = QRCode.create(traceUrl(lot), { errorCorrectionLevel: 'M' })
-  const n = qr.modules.size
-  // like the OkoHACCP labels: a modest QR, the rest of the label for large text
-  const cell = Math.max(1, Math.floor((Math.min(h * 0.6, w * 0.27, h - 2) * PX_PER_MM) / n))
-  const qrPx = cell * n
-  const qx = Math.round(pad), qy = Math.round((H - qrPx) / 2)
-  for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
-    if (qr.modules.data[r * n + col]) g.fillRect(qx + col * cell, qy + r * cell, cell, cell)
+  // QR (optional): whole-pixel modules so it stays sharp on a 300 dpi head
+  let x0 = Math.round(pad)
+  if (props.showQr) {
+    const qr = QRCode.create(traceUrl(lot), { errorCorrectionLevel: 'M' })
+    const n = qr.modules.size
+    const cell = Math.max(1, Math.floor((Math.min(h * 0.6, w * 0.27, h - 2) * PX_PER_MM) / n))
+    const qrPx = cell * n
+    const qx = Math.round(pad), qy = Math.round((H - qrPx) / 2)
+    for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+      if (qr.modules.data[r * n + col]) g.fillRect(qx + col * cell, qy + r * cell, cell, cell)
+    }
+    x0 = qx + qrPx + gap
   }
 
   // text: the biggest size at which every line fits (condensed face, like the OkoHACCP font)
-  const x0 = qx + qrPx + gap, maxW = W - x0 - pad, maxH = H - 2 * pad
+  const maxW = W - x0 - pad, maxH = H - 2 * pad
   const lines = simpleLines(props)
   const fontOf = (l, px) => `condensed ${l.bold ? 700 : 500} ${l.bold ? px * 1.05 : px}px ${FONT}`
-  let pt = 16, px, lh
+  let pt = 24, px, lh
   for (; pt >= 4.5; pt = Math.round((pt - 0.2) * 10) / 10) {
     px = pt * DPI / 72; lh = px * 1.16
     const widest = Math.max(...lines.map(l => { g.font = fontOf(l, px); return g.measureText(l.text).width }))
@@ -402,7 +406,7 @@ function CanvasPreview(props) {
   const [src, setSrc] = useState('')
   const [fontTick, setFontTick] = useState(0)
   useEffect(() => { labelFontsReady().then(() => setFontTick(x => x + 1)) }, [])
-  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, fontTick])
+  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, fontTick])
   useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
   return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
 }
