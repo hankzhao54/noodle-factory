@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
+import { toPng } from 'html-to-image'
+import { jsPDF } from 'jspdf'
 import { db, q } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
@@ -74,6 +76,9 @@ export default function LabelPrint({ batchId, onClose }) {
   const [fitPt, setFitPt] = useState(null)
   const [copies, setCopies] = useState(1)
   const [printing, setPrinting] = useState(false)
+  const [pdfJob, setPdfJob] = useState(null)      // { win } while building the PDF
+  const [pdfUrl, setPdfUrl] = useState(null)
+  const renderBox = useRef(null)
   const [qr, setQr] = useState('')
   const [settings, setSettings] = useState(null)
   const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v2', n); return n })
@@ -113,9 +118,50 @@ export default function LabelPrint({ batchId, onClose }) {
     const style = document.createElement('style')
     style.textContent = `@media print { @page { size: ${w}mm ${h}mm; margin: 0; } }`
     document.head.appendChild(style)
-    const id = setTimeout(() => { window.print(); style.remove(); setPrinting(false) }, 80)
-    return () => { clearTimeout(id); style.remove() }
+    // iPhone Safari returns from print() before it has printed, so keep the labels
+    // on the page until the browser says printing is over
+    const done = () => { style.remove(); setPrinting(false) }
+    window.addEventListener('afterprint', done, { once: true })
+    const id = setTimeout(() => window.print(), 80)
+    const safety = setTimeout(done, 120000)
+    return () => { clearTimeout(id); clearTimeout(safety); window.removeEventListener('afterprint', done); style.remove() }
   }, [printing, w, h])
+
+  // PDF: exact label size per page; works the same on iPhone, Mac, Windows
+  useEffect(() => {
+    if (!pdfJob) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        await (document.fonts?.ready || Promise.resolve())
+        await new Promise(r => setTimeout(r, 50))
+        const nodes = [...(renderBox.current?.children || [])]
+        const pdf = new jsPDF({ unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait', compress: true })
+        for (let i = 0; i < nodes.length; i++) {
+          const png = await toPng(nodes[i], { pixelRatio: 4, backgroundColor: '#ffffff', cacheBust: false })
+          if (i) pdf.addPage([w, h], w > h ? 'landscape' : 'portrait')
+          pdf.addImage(png, 'PNG', 0, 0, w, h, undefined, 'FAST')
+        }
+        if (cancelled) return
+        const url = URL.createObjectURL(pdf.output('blob'))
+        setPdfUrl(old => { if (old) URL.revokeObjectURL(old); return url })
+        if (pdfJob.win && !pdfJob.win.closed) pdfJob.win.location.href = url
+        else window.open(url, '_blank')
+      } catch (e) {
+        pdfJob.win?.close()
+        toast(errText(e), 'error')
+      } finally { if (!cancelled) setPdfJob(null) }
+    })()
+    return () => { cancelled = true }
+  }, [pdfJob]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl) }, [pdfUrl])
+
+  function startPdf() {
+    // open the tab now, inside the tap, so phones don't block it as a pop-up
+    const win = window.open('', '_blank')
+    if (win) win.document.write('<p style="font:16px system-ui;padding:24px">PDF…</p>')
+    setPdfJob({ win })
+  }
 
   async function saveSettings() {
     try {
@@ -192,12 +238,19 @@ export default function LabelPrint({ batchId, onClose }) {
       </div>
 
       <div className="modal-foot">
+        <button className="btn btn-quiet" disabled={!qr || !(copies > 0) || printing} onClick={() => setPrinting(true)}>{t('browserPrint')}</button>
+        {pdfUrl && <a className="btn btn-quiet" href={pdfUrl} target="_blank" rel="noreferrer">{t('openPdfAgain')}</a>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
-        <button className="btn btn-primary" disabled={!qr || !(copies > 0)} onClick={() => setPrinting(true)}>
-          {t('print')} × {copies || 0}
+        <button className="btn btn-primary" disabled={!qr || !(copies > 0) || !!pdfJob} onClick={startPdf}>
+          {pdfJob ? t('makingPdf') : `${t('print')} × ${copies || 0}`}
         </button>
       </div>
+
+      {pdfJob && createPortal(
+        <div className="label-render" ref={renderBox} aria-hidden="true">
+          {Array.from({ length: Math.min(copies, 200) }).map((_, i) => <Label key={i} {...label} labelId={idFor(i)} fitPt={fitPt} />)}
+        </div>, document.body)}
 
       {printing && createPortal(
         <div className="print-only label-print">
@@ -220,18 +273,18 @@ function SimpleLabel({ product, batch, expiry, qr, lang, w, h, recorder, amount,
   const useBy = product.shelf_life_days != null && produced
     ? new Date(new Date(produced).getTime() + product.shelf_life_days * 864e5)
     : expiry
-  const qrSize = Math.min(h - 5, w * 0.33)
+  const qrSize = Math.min(h * 0.72, w * 0.3)
   // shrink the text until every line fits (never cut off a date)
   // Only the on-screen preview can be measured (print copies are hidden), so it finds
   // the size and reports it; the printed copies use that size.
   const box = useRef(null)
-  const [pt, setPt] = useState(7.6)
-  useLayoutEffect(() => { if (measure) setPt(7.6) }, [measure, w, h, recorder, amount, unit, labelId, lang])
+  const [pt, setPt] = useState(9)
+  useLayoutEffect(() => { if (measure) setPt(9) }, [measure, w, h, recorder, amount, unit, labelId, lang])
   // re-measure once the web font has loaded (it is wider than the fallback)
   useEffect(() => {
     if (!measure || !document.fonts?.ready) return
     let live = true
-    document.fonts.ready.then(() => { if (live) setPt(7.6) })
+    document.fonts.ready.then(() => { if (live) setPt(9) })
     return () => { live = false }
   }, [measure])
   useLayoutEffect(() => {
@@ -240,7 +293,7 @@ function SimpleLabel({ product, batch, expiry, qr, lang, w, h, recorder, amount,
     if (el && pt > 5 && (el.scrollWidth > el.clientWidth + 0.5 || el.scrollHeight > el.clientHeight + 0.5)) setPt(p => Math.round((p - 0.2) * 10) / 10)
     else onFit?.(pt)
   }, [measure, pt, w, h, recorder, amount, unit, labelId, lang]) // eslint-disable-line react-hooks/exhaustive-deps
-  const size = measure ? pt : (fitPt || 7.6)
+  const size = measure ? pt : (fitPt || 9)
   return (
     <div className="label label-simple" style={{ width: `${w}mm`, height: `${h}mm` }}>
       <div className="label-qr" style={{ width: `${qrSize}mm`, height: `${qrSize}mm` }} dangerouslySetInnerHTML={{ __html: qr }} />
