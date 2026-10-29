@@ -161,8 +161,8 @@ export default function LabelPrint({ batchId, onClose }) {
 
   function printSimple() {
     try {
-      const rot = opt.pdfMode === 'rotated'
-      const pw = rot ? h : w, ph = rot ? w : h
+      const rot = false
+      const pw = w, ph = h
       const orient = pw > ph ? 'landscape' : 'portrait'
       const pdf = new jsPDF({ unit: 'mm', format: [pw, ph], orientation: orient, compress: true })
       for (let i = 0; i < Math.min(copies, 200); i++) {
@@ -271,14 +271,6 @@ export default function LabelPrint({ batchId, onClose }) {
               </div>
             </Field>
           </> : <label className="check-inline"><input type="checkbox" checked={opt.ingredients} onChange={e => set({ ingredients: e.target.checked })} />{t('showIngredients')}</label>}
-          {simple && (
-            <Field label={t('pdfMode')} hint={t('pdfModeHint')}>
-              <select value={opt.pdfMode || 'normal'} onChange={e => set({ pdfMode: e.target.value })}>
-                <option value="normal">{t('pdfNormal')}</option>
-                <option value="rotated">{t('pdfRotated')}</option>
-              </select>
-            </Field>
-          )}
           <Field label={t('copies')} hint={copies > 1 ? t('copiesIdHint', { a: idFor(0), b: idFor(copies - 1) }) : null}><NumInput value={copies} min={1} max={200} onChange={v => setCopies(v)} /></Field>
 
           {!simple && <details className="label-producer">
@@ -309,12 +301,14 @@ export default function LabelPrint({ batchId, onClose }) {
 
       <div className="modal-foot">
         <button className="btn btn-quiet" disabled={!qr || !(copies > 0) || printing} onClick={() => setPrinting(true)}>{t('browserPrint')}</button>
-        {simple && <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={shareImages}>{t('shareImage')}</button>}
+        {simple && (touch
+          ? <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={printSimple}>{t('sharePdf')}</button>
+          : <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={shareImages}>{t('shareImage')}</button>)}
         {pdfUrl && <a className="btn btn-quiet" href={pdfUrl} target="_blank" rel="noreferrer">{t('openPdfAgain')}</a>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
         {simple ? (
-          <button className="btn btn-primary" disabled={!(copies > 0)} onClick={printSimple}>{t('print')} × {copies || 0}</button>
+          <button className="btn btn-primary" disabled={!(copies > 0)} onClick={touch ? shareImages : printSimple}>{t('print')} × {copies || 0}</button>
         ) : fullPdf ? (
           <button className="btn btn-primary" onClick={() => deliverPdf(fullPdf)}>{t('pdfReadyPrint')}</button>
         ) : (
