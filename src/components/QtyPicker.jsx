@@ -1,7 +1,10 @@
 import { useT, fmtFt, fmtNum } from '../lib/i18n'
+import ImageThumb from './ImageThumb'
 
 // product rows with − / + steppers. items: [{id, name_*, unit, price, min_order_qty, pack_size_g}]
 export default function QtyPicker({ items, qty, setQty }) {
+  // only show the photo column when at least one product has a photo
+  const withPhotos = items.some(p => p.image_path)
   const t = useT()
   const set = (id, v) => setQty(s => {
     const n = { ...s }
@@ -16,6 +19,7 @@ export default function QtyPicker({ items, qty, setQty }) {
         const min = Number(p.min_order_qty) || 0
         return (
           <li key={p.id} className={v ? 'has-qty' : ''}>
+            {withPhotos && <ImageThumb path={p.image_path} size={52} />}
             <div className="qty-info">
               <span className="qty-name">{t.pick(p)}</span>
               <span className="qty-meta">

@@ -385,3 +385,13 @@ textarea { resize: vertical; }
   .dnote-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 24mm; margin-top: 22mm; }
   .dnote-sign div { border-top: 1px solid #000; padding-top: 4px; font-size: 9pt; }
 }
+
+/* photos */
+.thumb { display: block; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--line-2); flex: none; }
+.thumb-empty { display: block; border-radius: var(--r-sm); background: repeating-linear-gradient(135deg, var(--line-2) 0 6px, #F6F7F5 6px 12px); flex: none; }
+.thumb-btn { padding: 0; border: 0; background: none; cursor: zoom-in; display: block; }
+.table td.thumb-col, .table th.thumb-col { width: 1%; padding-right: 0; }
+.photo-row { display: flex; gap: 14px; align-items: center; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.photo-actions .field-hint { flex-basis: 100%; }
+.photo-big { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; border-radius: var(--r-sm); }

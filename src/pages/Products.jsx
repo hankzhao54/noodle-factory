@@ -15,7 +15,7 @@ export default function Products() {
     return p > 0 && c > 0 ? Math.round((1 - c / p) * 100) + '%' : '–'
   }
   return (
-    <CrudPage table="products" title={t('nav_products')} order="sort"
+    <CrudPage table="products" title={t('nav_products')} order="sort" imageFolder="products"
       searchKeys={['name_zh', 'name_en', 'name_hu', 'code']}
       defaults={{ unit: 'kg', active: true, visible_to_customers: true, batch_yield: 1, base_price: 0, min_order_qty: 0, sort: 0 }}
       afterSave={reload}

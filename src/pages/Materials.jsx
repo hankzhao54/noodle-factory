@@ -12,7 +12,7 @@ export default function Materials() {
   return (
     <>
     <datalist id="material-categories">{categoryOptions(t.lang).map(c => <option key={c} value={c} />)}</datalist>
-    <CrudPage table="materials" title={t('nav_materials')} order="name_zh"
+    <CrudPage table="materials" title={t('nav_materials')} order="name_zh" imageFolder="materials"
       searchKeys={['name_zh', 'name_en', 'name_hu', 'code', 'category']}
       defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true }}
       columns={[

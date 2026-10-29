@@ -15,7 +15,7 @@ export default function Orders() {
     const [orders, customers, products] = await Promise.all([
       q(db.from('orders').select('*, order_lines(*)').gte('delivery_date', from).order('delivery_date').order('created_at')),
       q(db.from('customers').select('id,name,type').order('name')),
-      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price,min_order_qty,pack_size_g,active,sort').order('sort')),
+      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price,min_order_qty,pack_size_g,active,sort,image_path').order('sort')),
     ])
     return { orders, customers, products }
   }, [from])
