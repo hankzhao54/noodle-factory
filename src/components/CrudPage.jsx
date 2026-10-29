@@ -96,6 +96,7 @@ function EditForm({ table, fields, row, title, onClose, onSaved, onDeleted, onEr
   const [v, setV] = useState(() => {
     const o = { ...row }
     fields.forEach(f => { if (f.type === 'tags') o[f.key] = (row[f.key] || []).join(', ') })
+    fields.forEach(f => { if (f.display && o[f.key]) o[f.key] = f.display(o[f.key]) })
     return o
   })
   const [busy, setBusy] = useState(false)

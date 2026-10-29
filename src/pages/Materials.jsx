@@ -29,7 +29,7 @@ export default function Materials() {
         { key: 'code', label: t('code') },
         { key: 'name_en', label: t('name_en') },
         { key: 'name_hu', label: t('name_hu') },
-        { key: 'category', label: t('category'), list: 'material-categories', hint: t('categoryHint') },
+        { key: 'category', label: t('category'), list: 'material-categories', hint: t('categoryHint'), display: t.cat },
         { key: 'unit', label: t('unit'), type: 'select', required: true, options: UNITS.map(u => [u, u]) },
         { key: 'cost_per_unit', label: t('costPerUnit'), type: 'number' },
         { key: 'min_stock', label: t('minStock'), type: 'number' },
