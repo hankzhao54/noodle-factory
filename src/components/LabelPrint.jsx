@@ -150,16 +150,49 @@ export default function LabelPrint({ batchId, onClose }) {
     return new jsPDF({ unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait', compress: true })
   }
 
+  // rotate a label canvas 90° clockwise (for printers/phones that feed the roll portrait)
+  function rotated(c) {
+    const r = document.createElement('canvas')
+    r.width = c.height; r.height = c.width
+    const g = r.getContext('2d')
+    g.translate(r.width, 0); g.rotate(Math.PI / 2); g.drawImage(c, 0, 0)
+    return r
+  }
+
   function printSimple() {
     try {
-      const pdf = newPdf()
+      const rot = opt.pdfMode === 'rotated'
+      const pw = rot ? h : w, ph = rot ? w : h
+      const orient = pw > ph ? 'landscape' : 'portrait'
+      const pdf = new jsPDF({ unit: 'mm', format: [pw, ph], orientation: orient, compress: true })
       for (let i = 0; i < Math.min(copies, 200); i++) {
-        if (i) pdf.addPage([w, h], w > h ? 'landscape' : 'portrait')
-        const c = drawSimpleLabel({ ...label, labelId: idFor(i) })
-        pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, w, h, undefined, 'FAST')
+        if (i) pdf.addPage([pw, ph], orient)
+        let c = drawSimpleLabel({ ...label, labelId: idFor(i) })
+        if (rot) c = rotated(c)
+        pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, pw, ph, undefined, 'FAST')
       }
       deliverPdf(pdf.output('blob'))
     } catch (e) { toast(errText(e), 'error') }
+  }
+
+  // PNG images, one per label: for Brother iPrint&Label or other label apps
+  async function shareImages() {
+    try {
+      const files = []
+      for (let i = 0; i < Math.min(copies, 50); i++) {
+        const c = drawSimpleLabel({ ...label, labelId: idFor(i) })
+        const blob = await new Promise(r => c.toBlob(r, 'image/png'))
+        files.push(new File([blob], `label-${idFor(i)}.png`, { type: 'image/png' }))
+      }
+      if (navigator.canShare?.({ files })) await navigator.share({ files })
+      else {
+        files.forEach(f => {
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(f); a.download = f.name; a.click()
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+        })
+      }
+    } catch (e) { if (e?.name !== 'AbortError') toast(errText(e), 'error') }
   }
 
   useEffect(() => {
@@ -238,6 +271,14 @@ export default function LabelPrint({ batchId, onClose }) {
               </div>
             </Field>
           </> : <label className="check-inline"><input type="checkbox" checked={opt.ingredients} onChange={e => set({ ingredients: e.target.checked })} />{t('showIngredients')}</label>}
+          {simple && (
+            <Field label={t('pdfMode')} hint={t('pdfModeHint')}>
+              <select value={opt.pdfMode || 'normal'} onChange={e => set({ pdfMode: e.target.value })}>
+                <option value="normal">{t('pdfNormal')}</option>
+                <option value="rotated">{t('pdfRotated')}</option>
+              </select>
+            </Field>
+          )}
           <Field label={t('copies')} hint={copies > 1 ? t('copiesIdHint', { a: idFor(0), b: idFor(copies - 1) }) : null}><NumInput value={copies} min={1} max={200} onChange={v => setCopies(v)} /></Field>
 
           {!simple && <details className="label-producer">
@@ -268,6 +309,7 @@ export default function LabelPrint({ batchId, onClose }) {
 
       <div className="modal-foot">
         <button className="btn btn-quiet" disabled={!qr || !(copies > 0) || printing} onClick={() => setPrinting(true)}>{t('browserPrint')}</button>
+        {simple && <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={shareImages}>{t('shareImage')}</button>}
         {pdfUrl && <a className="btn btn-quiet" href={pdfUrl} target="_blank" rel="noreferrer">{t('openPdfAgain')}</a>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
