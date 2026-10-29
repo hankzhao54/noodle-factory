@@ -127,7 +127,41 @@ export default function LabelPrint({ batchId, onClose }) {
     return () => { clearTimeout(id); clearTimeout(safety); window.removeEventListener('afterprint', done); style.remove() }
   }, [printing, w, h])
 
-  // PDF: exact label size per page; works the same on iPhone, Mac, Windows
+  // PDF with pages exactly the label size. iPhone: system share sheet (contains Print),
+  // computer: open the PDF in a new tab. No pop-up window (Safari blocks those).
+  const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+  const [fullPdf, setFullPdf] = useState(null)   // built asynchronously for the full template
+
+  function deliverPdf(blob) {
+    const file = new File([blob], `label-${lot}.pdf`, { type: 'application/pdf' })
+    if (touch && navigator.canShare?.({ files: [file] })) {
+      navigator.share({ files: [file] }).catch(e => { if (e?.name !== 'AbortError') openBlob(blob) })
+      return
+    }
+    openBlob(blob)
+  }
+  function openBlob(blob) {
+    const url = URL.createObjectURL(blob)
+    setPdfUrl(old => { if (old) URL.revokeObjectURL(old); return url })
+    const win = window.open(url, '_blank')
+    if (!win) window.location.href = url
+  }
+  function newPdf() {
+    return new jsPDF({ unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait', compress: true })
+  }
+
+  function printSimple() {
+    try {
+      const pdf = newPdf()
+      for (let i = 0; i < Math.min(copies, 200); i++) {
+        if (i) pdf.addPage([w, h], w > h ? 'landscape' : 'portrait')
+        const c = drawSimpleLabel({ ...label, labelId: idFor(i) })
+        pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, w, h, undefined, 'FAST')
+      }
+      deliverPdf(pdf.output('blob'))
+    } catch (e) { toast(errText(e), 'error') }
+  }
+
   useEffect(() => {
     if (!pdfJob) return
     let cancelled = false
@@ -136,32 +170,21 @@ export default function LabelPrint({ batchId, onClose }) {
         await (document.fonts?.ready || Promise.resolve())
         await new Promise(r => setTimeout(r, 50))
         const nodes = [...(renderBox.current?.children || [])]
-        const pdf = new jsPDF({ unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait', compress: true })
+        const pdf = newPdf()
         for (let i = 0; i < nodes.length; i++) {
-          const png = await toPng(nodes[i], { pixelRatio: 4, backgroundColor: '#ffffff', cacheBust: false })
+          const png = await toPng(nodes[i], { pixelRatio: 4, backgroundColor: '#ffffff' })
           if (i) pdf.addPage([w, h], w > h ? 'landscape' : 'portrait')
           pdf.addImage(png, 'PNG', 0, 0, w, h, undefined, 'FAST')
         }
-        if (cancelled) return
-        const url = URL.createObjectURL(pdf.output('blob'))
-        setPdfUrl(old => { if (old) URL.revokeObjectURL(old); return url })
-        if (pdfJob.win && !pdfJob.win.closed) pdfJob.win.location.href = url
-        else window.open(url, '_blank')
-      } catch (e) {
-        pdfJob.win?.close()
-        toast(errText(e), 'error')
-      } finally { if (!cancelled) setPdfJob(null) }
+        if (!cancelled) setFullPdf(pdf.output('blob'))
+      } catch (e) { toast(errText(e), 'error') }
+      finally { if (!cancelled) setPdfJob(null) }
     })()
     return () => { cancelled = true }
   }, [pdfJob]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl) }, [pdfUrl])
-
-  function startPdf() {
-    // open the tab now, inside the tap, so phones don't block it as a pop-up
-    const win = window.open('', '_blank')
-    if (win) win.document.write('<p style="font:16px system-ui;padding:24px">PDF…</p>')
-    setPdfJob({ win })
-  }
+  // any change to the label makes a prepared full PDF stale
+  useEffect(() => { setFullPdf(null) }, [opt, copies, recorder, amount, unit, settings])
 
   async function saveSettings() {
     try {
@@ -228,11 +251,17 @@ export default function LabelPrint({ batchId, onClose }) {
 
         <div className="label-preview-wrap">
           <p className="muted small">{t('labelPreview')} · {w} × {h} mm</p>
-          <div className="label-preview" style={{ width: `${w * scale}mm`, height: `${h * scale}mm` }}>
-            <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-              <Label {...label} labelId={idFor(Math.max(0, (copies || 1) - 1))} measure onFit={setFitPt} />
+          {simple ? (
+            <div className="label-preview" style={{ width: `${w * scale}mm`, aspectRatio: `${w} / ${h}` }}>
+              <CanvasPreview {...label} labelId={idFor(Math.max(0, (copies || 1) - 1))} />
             </div>
-          </div>
+          ) : (
+            <div className="label-preview" style={{ width: `${w * scale}mm`, height: `${h * scale}mm` }}>
+              <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                <Label {...label} labelId={idFor(Math.max(0, (copies || 1) - 1))} measure onFit={setFitPt} />
+              </div>
+            </div>
+          )}
           <p className="muted small label-hint">{t('labelHint')}</p>
         </div>
       </div>
@@ -242,9 +271,15 @@ export default function LabelPrint({ batchId, onClose }) {
         {pdfUrl && <a className="btn btn-quiet" href={pdfUrl} target="_blank" rel="noreferrer">{t('openPdfAgain')}</a>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
-        <button className="btn btn-primary" disabled={!qr || !(copies > 0) || !!pdfJob} onClick={startPdf}>
-          {pdfJob ? t('makingPdf') : `${t('print')} × ${copies || 0}`}
-        </button>
+        {simple ? (
+          <button className="btn btn-primary" disabled={!(copies > 0)} onClick={printSimple}>{t('print')} × {copies || 0}</button>
+        ) : fullPdf ? (
+          <button className="btn btn-primary" onClick={() => deliverPdf(fullPdf)}>{t('pdfReadyPrint')}</button>
+        ) : (
+          <button className="btn btn-primary" disabled={!qr || !(copies > 0) || !!pdfJob} onClick={() => setPdfJob({})}>
+            {pdfJob ? t('makingPdf') : `${t('print')} × ${copies || 0}`}
+          </button>
+        )}
       </div>
 
       {pdfJob && createPortal(
@@ -264,6 +299,71 @@ export default function LabelPrint({ batchId, onClose }) {
 export function Label(props) {
   if (props.simple) return <SimpleLabel {...props} />
   return <FullLabel {...props} />
+}
+
+/* ---- simple label drawn straight onto a canvas (what you see = what prints) ---- */
+const DPI = 300
+const PX_PER_MM = DPI / 25.4
+const FONT = 'Archivo, "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+
+function simpleLines({ product, batch, expiry, lang, recorder, amount, unit, labelId }) {
+  const T = L[lang] || L.hu
+  const produced = batch.done_at || batch.planned_date
+  const useBy = product.shelf_life_days != null && produced
+    ? new Date(new Date(produced).getTime() + product.shelf_life_days * 864e5) : expiry
+  return [
+    { text: nameIn(product, lang), bold: true },
+    { text: `${T.id}: ${labelId}` },
+    recorder && { text: `${T.recorder}: ${recorder}` },
+    { text: `${T.producedAt}: ${ymdhm(produced)}` },
+    useBy && { text: `${T.useBy}: ${ymdhm(useBy)}` },
+    amount > 0 && { text: `${T.qty}: ${fmtNum(amount, 'hu', 3)} ${T.units[unit] || unit}` },
+  ].filter(Boolean)
+}
+
+export function drawSimpleLabel(props) {
+  const { w, h, lot } = props
+  const W = Math.round(w * PX_PER_MM), H = Math.round(h * PX_PER_MM)
+  const c = document.createElement('canvas')
+  c.width = W; c.height = H
+  const g = c.getContext('2d')
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H)
+  g.fillStyle = '#000'
+  const pad = 1.8 * PX_PER_MM, gap = 1.6 * PX_PER_MM
+
+  // QR: whole-pixel modules so it stays sharp on a 300 dpi head
+  const qr = QRCode.create(traceUrl(lot), { errorCorrectionLevel: 'M' })
+  const n = qr.modules.size
+  const cell = Math.max(1, Math.floor((Math.min(h * 0.72, w * 0.3) * PX_PER_MM) / n))
+  const qrPx = cell * n
+  const qx = Math.round(pad), qy = Math.round((H - qrPx) / 2)
+  for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+    if (qr.modules.data[r * n + col]) g.fillRect(qx + col * cell, qy + r * cell, cell, cell)
+  }
+
+  // text: biggest size (≤ 9 pt) at which every line fits
+  const x0 = qx + qrPx + gap, maxW = W - x0 - pad, maxH = H - 2 * pad
+  const lines = simpleLines(props)
+  const fontOf = (l, px) => `${l.bold ? 700 : 400} ${l.bold ? px * 1.08 : px}px ${FONT}`
+  let pt = 9, px, lh
+  for (; pt >= 4.5; pt = Math.round((pt - 0.2) * 10) / 10) {
+    px = pt * DPI / 72; lh = px * 1.2
+    const widest = Math.max(...lines.map(l => { g.font = fontOf(l, px); return g.measureText(l.text).width }))
+    if (widest <= maxW && lines.length * lh <= maxH) break
+  }
+  g.textBaseline = 'middle'
+  let y = (H - lines.length * lh) / 2 + lh / 2
+  for (const l of lines) { g.font = fontOf(l, px); g.fillText(l.text, x0, y); y += lh }
+  return c
+}
+
+function CanvasPreview(props) {
+  const [src, setSrc] = useState('')
+  const [fontTick, setFontTick] = useState(0)
+  useEffect(() => { document.fonts?.ready?.then(() => setFontTick(x => x + 1)) }, [])
+  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, fontTick])
+  useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
 }
 
 /* same layout as the OkoHACCP labels: QR left, six lines right */
