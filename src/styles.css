@@ -399,3 +399,4 @@ textarea { resize: vertical; }
   .qty-list li { gap: 10px; }
   .qty-list li > .thumb, .qty-list li > .thumb-empty { width: 40px !important; height: 40px !important; }
 }
+.st-failed { background: #FDECEA; color: #A8322A; }

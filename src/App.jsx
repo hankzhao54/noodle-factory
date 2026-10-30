@@ -20,6 +20,7 @@ import Users from './pages/Users'
 import Portal from './portal/Portal'
 import Trace from './pages/Trace'
 import LabelSettings from './pages/LabelSettings'
+import EmailSettings from './pages/EmailSettings'
 
 export default function App() {
   const [lang, setLangState] = useState(() => localStorage.getItem('nf-lang') || 'hu')
@@ -80,7 +81,7 @@ function StaffShell() {
   ]
   const setup = [
     ['/products', 'nav_products'], ['/materials', 'nav_materials'], ['/suppliers', 'nav_suppliers'],
-    ['/customers', 'nav_customers'], ['/label-settings', 'nav_labelSettings'], ...(isAdmin ? [['/users', 'nav_users']] : []),
+    ['/customers', 'nav_customers'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(isAdmin ? [['/users', 'nav_users']] : []),
   ]
   return (
     <div className={`shell ${open ? 'nav-open' : ''}`}>
@@ -120,6 +121,7 @@ function StaffShell() {
           <Route path="/customers" element={<Customers />} />
           <Route path="/trace/:lot" element={<Trace />} />
           <Route path="/label-settings" element={<LabelSettings />} />
+          <Route path="/email-settings" element={<EmailSettings />} />
           {isAdmin && <Route path="/users" element={<Users />} />}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
