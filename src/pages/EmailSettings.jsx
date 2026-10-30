@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, Empty, useToast, errText } from '../components/ui'
 
-const KEYS = ['email_mode', 'email_test_to', 'email_factory_to', 'email_factory_lang', 'email_from', 'email_reply_to']
+const KEYS = ['email_mode', 'email_test_to', 'email_factory_to', 'email_factory_lang', 'email_from', 'email_reply_to', 'email_block']
 
 // Order emails: on/off/test mode, alert address, sender, and the log of what was sent.
 export default function EmailSettings() {
@@ -65,6 +65,9 @@ export default function EmailSettings() {
             <input type="text" value={v.email_from || ''} disabled={off} onChange={e => set('email_from', e.target.value)} /></label>
           <label className="field"><span className="field-label">{t('emReplyTo')}</span>
             <input type="text" value={v.email_reply_to || ''} disabled={off} onChange={e => set('email_reply_to', e.target.value)} /></label>
+          <label className="field span-2"><span className="field-label">{t('emBlock')}</span>
+            <input type="text" value={v.email_block || ''} disabled={off} onChange={e => set('email_block', e.target.value)} />
+            <span className="field-hint">{t('emBlockHint')}</span></label>
           <p className="muted small span-2">{t('emCustomerHint')}</p>
         </div>
         {!off && <div className="modal-foot pad"><span className="grow" />

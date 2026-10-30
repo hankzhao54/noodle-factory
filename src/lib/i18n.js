@@ -248,6 +248,8 @@ const D = {
   emFrom: ['发件人', 'Sender', 'Feladó'],
   emReplyTo: ['回复地址', 'Reply-to', 'Válaszcím'],
   emCustomerHint: ['客户邮件发到：「客户」里填的邮箱 + 关联到该客户的账号邮箱；语言跟账号语言走。', 'Customer emails go to the email on the customer record plus the emails of accounts linked to that customer, in the account\'s language.', 'Az ügyfél-e-mailek az ügyfélnél megadott címre és az ügyfélhez kapcsolt fiókok címére mennek, a fiók nyelvén.'],
+  emBlock: ['不发送的地址', 'Never email these addresses', 'Ezekre a címekre ne küldjön'],
+  emBlockHint: ['例如测试账号；多个地址用逗号分开', 'For example test accounts; separate several with commas', 'Például teszt fiókok; több címet vesszővel válasszon el'],
   emLog: ['发送记录', 'Sending log', 'Küldési napló'],
   emLogEmpty: ['还没有发过邮件', 'No emails sent yet', 'Még nem ment ki e-mail'],
   emTime: ['时间', 'Time', 'Idő'],

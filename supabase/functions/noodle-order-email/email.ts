@@ -174,5 +174,8 @@ export function buildEmails(p: any, event: string): Mail[] {
       }
     })
   }
-  return s.email_mode === 'live' ? out : []
+  if (s.email_mode !== 'live') return []
+  // live: never email addresses on the block list (e.g. test accounts)
+  const blocked = new Set(splitEmails(s.email_block))
+  return out.map(m => ({ ...m, to: m.to.filter(x => !blocked.has(x)) })).filter(m => m.to.length)
 }

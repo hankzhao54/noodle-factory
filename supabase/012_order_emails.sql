@@ -29,6 +29,7 @@ insert into noodle.settings (key, value) values
   ('email_factory_lang', 'hu'),                 -- hu | en | zh
   ('email_from', 'Tésztaüzem · 101 Bistro <rendeles@101bistro.hu>'),
   ('email_reply_to', 'rendeles@101bistro.hu'),
+  ('email_block', ''),                          -- never email these (comma separated)
   ('app_url', 'https://noodle.101bistro.hu')
 on conflict (key) do nothing;
 
