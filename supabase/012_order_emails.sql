@@ -24,8 +24,8 @@ end $$;
 -- settings (staff can read, admin can edit — same as label settings)
 insert into noodle.settings (key, value) values
   ('email_mode', 'test'),                       -- off | test | live
-  ('email_test_to', 'hello@101bistro.hu'),      -- in test mode every email goes only here
-  ('email_factory_to', 'hello@101bistro.hu'),   -- new-order alerts (comma separated)
+  ('email_test_to', 'hank@101bistro.hu'),       -- in test mode every email goes only here
+  ('email_factory_to', 'hank@101bistro.hu'),    -- new-order alerts (comma separated)
   ('email_factory_lang', 'hu'),                 -- hu | en | zh
   ('email_from', 'Tésztaüzem · 101 Bistro <rendeles@101bistro.hu>'),
   ('email_reply_to', 'rendeles@101bistro.hu'),
