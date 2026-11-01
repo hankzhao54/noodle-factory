@@ -39,6 +39,9 @@ export default function Trace() {
   const { batch: b, product: p, lines, moves, received } = data
   const out = moves.find(m => m.reason === 'production_out')
   const lastLot = id => received.find(r => r.material_id === id)
+  // lots actually taken by this batch (batches finished after lot tracking started)
+  const usedLots = id => moves.filter(m => m.reason === 'production_use' && m.material_id === id)
+  const hasLotInfo = moves.some(m => m.reason === 'production_use' && m.lot_no)
 
   return (
     <div className="page trace">
@@ -59,7 +62,7 @@ export default function Trace() {
       </dl>
       <h2 className="trace-sub">{t('ingredientsUsed')}</h2>
       <div className="table-wrap"><table className="table">
-        <thead><tr><th>{t('nav_materials')}</th><th className="num">{t('qty')}</th><th>{t('allergens')}</th><th>{t('latestReceivedLot')}</th></tr></thead>
+        <thead><tr><th>{t('nav_materials')}</th><th className="num">{t('qty')}</th><th>{t('allergens')}</th><th>{t(hasLotInfo ? 'lotsUsed' : 'latestReceivedLot')}</th></tr></thead>
         <tbody>{[...lines].sort((a, z) => kg(z) - kg(a)).map((l, i) => {
           const m = l.materials || {}
           const r = lastLot(m.id)
@@ -68,12 +71,16 @@ export default function Trace() {
               <td><b>{t.pick(m)}</b></td>
               <td className="num">{fmtNum(l.qty_per_batch * b.batches, t.lang)} <span className="unit">{m.unit}</span></td>
               <td>{(m.allergens || []).join(', ') || '–'}</td>
-              <td className="muted">{r ? `${r.lot_no ? r.lot_no + ' · ' : ''}${fmtDate(r.created_at, t.lang)}${r.expiry_date ? ` → ${fmtDate(r.expiry_date, t.lang)}` : ''}` : '–'}</td>
+              <td className="muted">{hasLotInfo
+                ? (usedLots(m.id).map((u, j) => (
+                    <div key={j}>{u.lot_no || t('noLot')} · {fmtNum(-u.qty, t.lang)} {m.unit}{u.expiry_date ? ` → ${fmtDate(u.expiry_date, t.lang)}` : ''}</div>
+                  )) )
+                : (r ? `${r.lot_no ? r.lot_no + ' · ' : ''}${fmtDate(r.created_at, t.lang)}${r.expiry_date ? ` → ${fmtDate(r.expiry_date, t.lang)}` : ''}` : '–')}</td>
             </tr>
           )
         })}</tbody>
       </table></div>
-      <p className="muted small" style={{ marginTop: 8 }}>{t('latestLotHint')}</p>
+      {!hasLotInfo && <p className="muted small" style={{ marginTop: 8 }}>{t('latestLotHint')}</p>}
       {printing && <LabelPrint batchId={b.id} onClose={() => setPrinting(false)} />}
     </div>
   )

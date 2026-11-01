@@ -5,6 +5,7 @@ import { useT } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, useToast, errText, NumInput } from './ui'
 import ImageThumb from './ImageThumb'
 import { imageUrl, uploadImage, removeImage } from '../lib/images'
+import { dayName } from '../lib/orderRules'
 
 /*
   Generic list + edit form for simple master-data tables.
@@ -113,6 +114,7 @@ function EditForm({ table, fields, row, title, onClose, onSaved, onDeleted, onEr
       if (f.type === 'tags') val = String(val || '').split(',').map(s => s.trim()).filter(Boolean)
       if (val === '' && f.type !== 'text' && f.type !== 'textarea') val = null
       if (f.type === 'select' && val === '') val = null
+      if (f.type === 'weekdays') val = Array.isArray(val) && val.length ? [...val].sort() : null
       payload[f.key] = val
     })
     try {
@@ -140,7 +142,21 @@ function EditForm({ table, fields, row, title, onClose, onSaved, onDeleted, onEr
     <Modal title={(row.id ? t('edit') : t('add')) + ' · ' + title} onClose={onClose} wide={fields.length > 6}>
       <form className="form-grid" onSubmit={save} id="crud-form">
         {imageFolder && <PhotoField current={photo.removed ? null : row.image_path} photo={photo} setPhoto={setPhoto} />}
-        {fields.map(f => (
+        {fields.map(f => f.type === 'weekdays' ? (
+          <div key={f.key} className={`field ${f.span ? 'span-' + f.span : ''}`} role="group" aria-label={f.label}>
+            <span className="field-label">{f.label}</span>
+            <span className="day-picker">{[1, 2, 3, 4, 5, 6, 7].map(d => {
+              const cur = Array.isArray(v[f.key]) ? v[f.key].map(Number) : []
+              return (
+                <label key={d} className={cur.includes(d) ? 'day on' : 'day'}>
+                  <input type="checkbox" checked={cur.includes(d)}
+                    onChange={() => set(f.key, cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d])} />
+                  {dayName(t.lang, d)}
+                </label>)
+            })}</span>
+            {f.hint && <span className="field-hint">{f.hint}</span>}
+          </div>
+        ) : (
           <Field key={f.key} label={f.label} hint={f.hint} span={f.span}>
             {f.type === 'bool' ? (
               <input type="checkbox" checked={!!v[f.key]} onChange={e => set(f.key, e.target.checked)} />

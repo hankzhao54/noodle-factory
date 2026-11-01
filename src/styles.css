@@ -400,3 +400,52 @@ textarea { resize: vertical; }
   .qty-list li > .thumb, .qty-list li > .thumb-empty { width: 40px !important; height: 40px !important; }
 }
 .st-failed { background: #FDECEA; color: #A8322A; }
+
+/* install hint */
+.install-hint { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin: 10px 0; }
+.install-hint img { border-radius: 8px; flex: none; }
+.install-hint .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/* delivery date chips (ordering page) */
+.date-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 0.9rem; cursor: pointer; }
+.chip.on { background: var(--ink, #1E2A2F); border-color: var(--ink, #1E2A2F); color: #fff; }
+.date-other { max-width: 220px; }
+.sheet-head .error-box { margin: 6px 0; }
+
+/* lots */
+.lots-toggle { display: block; margin-top: 2px; color: var(--ink-3); }
+.lots-row > td { background: #FAFBF9; padding: 6px 12px 12px; }
+.lots-table { background: #fff; }
+.tag-expired { background: #FDECEA; color: #A8322A; }
+.tag-soon { background: #FFF3CD; color: #8A6100; }
+
+/* weekday picker */
+.day-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-picker .day { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 0.9rem; background: #fff; user-select: none; }
+.day-picker .day input { position: absolute; opacity: 0; pointer-events: none; }
+.day-picker .day.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.day-picker .day:focus-within { outline: 2px solid var(--kansui, #E3B12C); outline-offset: 1px; }
+
+/* dashboard panels */
+.dash-panel { margin-top: 18px; }
+.dash-warn { padding: 10px 14px 14px; border-top: 1px solid var(--line-2); background: #FFF8F6; }
+.dash-warn ul { margin: 6px 0 0; padding-left: 18px; }
+.dash-warn li { margin: 3px 0; }
+.dash-warn .tag { margin-left: 8px; }
+.dash-ok { padding: 10px 14px; margin: 0; color: var(--ok); border-top: 1px solid var(--line-2); }
+.dash-list { list-style: none; margin: 0; padding: 4px 14px 12px; }
+.dash-list li { padding: 8px 0; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 3px; }
+.dash-list li:first-child { border-top: 0; }
+.dash-sup { font-weight: 650; }
+.dash-item { font-size: 0.92rem; }
+
+/* reports */
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 18px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi-label { font-size: 0.8rem; color: var(--ink-3); }
+.kpi-value { font-size: 1.25rem; }
+.kpi-sub { font-size: 0.78rem; color: var(--ink-3); }
+.bar { height: 4px; background: var(--line-2); border-radius: 4px; margin-top: 4px; min-width: 60px; }
+.bar span { display: block; height: 100%; background: var(--kansui, #E3B12C); border-radius: 4px; }
+.pad-x { padding: 0 14px; margin: 8px 0; }

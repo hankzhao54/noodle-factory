@@ -5,6 +5,7 @@ import { useData } from '../lib/useData'
 import { useT, fmtFt } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
 import { NumInput, useToast, errText } from '../components/ui'
+import { dayName } from '../lib/orderRules'
 
 export default function Customers() {
   const t = useT()
@@ -19,6 +20,7 @@ export default function Customers() {
         { key: 'contact_person', label: t('contact') },
         { key: 'phone', label: t('phone') },
         { key: 'address', label: t('address') },
+        { key: 'delivery_weekdays', label: t('deliveryDays'), render: r => r.delivery_weekdays?.length ? r.delivery_weekdays.map(d => dayName(t.lang, d)).join(', ') : <span className="muted">{t('anyDay')}</span> },
       ]}
       fields={[
         { key: 'name', label: t('name'), required: true },
@@ -29,6 +31,7 @@ export default function Customers() {
         { key: 'vat_no', label: t('vatNo') },
         { key: 'address', label: t('address'), span: 2 },
         { key: 'delivery_notes', label: t('deliveryNotes'), type: 'textarea', span: 2 },
+        { key: 'delivery_weekdays', label: t('deliveryDays'), type: 'weekdays', span: 2, hint: t('deliveryDaysHint') },
         { key: 'ramen_lead_place_id', label: t('ramenLead') },
         { key: 'active', label: t('active'), type: 'bool' },
       ]}

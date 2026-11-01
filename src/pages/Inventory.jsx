@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { db, q } from '../lib/supabase'
 import { useData } from '../lib/useData'
-import { useT, fmtNum, fmtFt } from '../lib/i18n'
+import { useT, fmtNum, fmtFt, fmtDate } from '../lib/i18n'
+import { daysUntil } from '../lib/lots'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Tabs, Strand, NumInput, useToast, errText } from '../components/ui'
 
 export default function Inventory() {
@@ -9,13 +10,16 @@ export default function Inventory() {
   const [tab, setTab] = useState('materials')
   const [adjusting, setAdjusting] = useState(null)
   const [term, setTerm] = useState('')
+  const [openLots, setOpenLots] = useState({})
   const { data, loading, error, reload } = useData(async () => {
-    const [materials, products] = await Promise.all([
+    const [materials, products, lots] = await Promise.all([
       q(db.from('material_stock').select('*').order('name_zh')),
       q(db.from('product_stock').select('*').order('name_zh')),
+      q(db.from('material_lots').select('*').order('expiry_date', { ascending: true, nullsFirst: false })),
     ])
-    return { materials, products }
+    return { materials, products, lots }
   })
+  const lotsOf = id => (data?.lots || []).filter(l => l.material_id === id)
   const match = r => !term || [r.name_zh, r.name_en, r.name_hu, r.code, r.category].some(x => x?.toLowerCase().includes(term.toLowerCase()))
 
   return (
@@ -29,18 +33,44 @@ export default function Inventory() {
         data.materials.length === 0 ? <Empty /> : (
           <div className="table-wrap"><table className="table">
             <thead><tr><th>{t('name')}</th><th className="hide-sm">{t('category')}</th><th className="strand-col" /><th className="num">{t('onHand')}</th>
-              <th className="num">{t('minStock')}</th><th className="num">{t('total')}</th><th /></tr></thead>
-            <tbody>{data.materials.filter(match).map(m => (
+              <th className="num">{t('minStock')}</th><th>{t('nextExpiry')}</th><th className="num hide-sm">{t('total')}</th><th /></tr></thead>
+            <tbody>{data.materials.filter(match).flatMap(m => {
+              const lots = lotsOf(m.id)
+              const first = lots.find(l => l.expiry_date)
+              const d = first ? daysUntil(first.expiry_date) : null
+              const isOpen = !!openLots[m.id]
+              const row = (
               <tr key={m.id} className={m.below_min ? 'row-low' : ''}>
-                <td><b>{t.pick(m)}</b>{m.below_min && <span className="tag tag-low">{t('belowMin')}</span>}</td>
+                <td>
+                  <b>{t.pick(m)}</b>{m.below_min && <span className="tag tag-low">{t('belowMin')}</span>}
+                  {lots.some(l => l.lot_no) && <button type="button" className="btn-link small lots-toggle" aria-expanded={isOpen}
+                    onClick={() => setOpenLots(s => ({ ...s, [m.id]: !s[m.id] }))}>{t('lotsN', { n: lots.length })} {isOpen ? '▴' : '▾'}</button>}
+                </td>
                 <td className="muted hide-sm">{t.cat(m.category) || '–'}</td>
                 <td className="strand-col"><Strand value={m.on_hand} min={m.min_stock} unit={m.unit} /></td>
                 <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span></td>
                 <td className="num muted">{fmtNum(m.min_stock, t.lang)}</td>
-                <td className="num muted">{fmtFt(m.on_hand * m.cost_per_unit, t.lang)}</td>
-                <td className="act"><button className="btn btn-quiet" onClick={() => setAdjusting({ kind: 'material', row: m })}>{t('adjust')}</button></td>
-              </tr>
-            ))}</tbody>
+                <td>{first ? <ExpiryTag date={first.expiry_date} days={d} /> : <span className="muted">–</span>}</td>
+                <td className="num muted hide-sm">{fmtFt(m.on_hand * m.cost_per_unit, t.lang)}</td>
+                <td className="act"><button className="btn btn-quiet" onClick={() => setAdjusting({ kind: 'material', row: m, lots })}>{t('adjust')}</button></td>
+              </tr>)
+              if (!isOpen) return [row]
+              return [row, (
+                <tr key={m.id + '-lots'} className="lots-row"><td colSpan={8}>
+                  <table className="table compact lots-table">
+                    <thead><tr><th>{t('lot')}</th><th>{t('receivedAt')}</th><th>{t('expiry')}</th><th className="num">{t('remaining')}</th></tr></thead>
+                    <tbody>{lots.map(l => (
+                      <tr key={(l.lot_no || '') + (l.expiry_date || '')}>
+                        <td>{l.lot_no || <span className="muted">{t('noLot')}</span>}</td>
+                        <td className="muted">{l.received_at ? fmtDate(l.received_at, t.lang) : '–'}</td>
+                        <td>{l.expiry_date ? <ExpiryTag date={l.expiry_date} days={daysUntil(l.expiry_date)} /> : '–'}</td>
+                        <td className="num">{fmtNum(l.remaining, t.lang)} <span className="unit">{m.unit}</span></td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </td></tr>
+              )]
+            })}</tbody>
           </table></div>
         )
       ) : (
@@ -67,21 +97,26 @@ export default function Inventory() {
   )
 }
 
-function Adjust({ kind, row, onClose, onDone }) {
+function Adjust({ kind, row, lots = [], onClose, onDone }) {
   const t = useT()
   const toast = useToast()
   const [mode, setMode] = useState('count')
   const [qty, setQty] = useState(null)
   const [note, setNote] = useState('')
-  const delta = mode === 'count' ? (qty ?? row.on_hand) - row.on_hand : -(qty || 0)
+  const [lotKey, setLotKey] = useState('')      // '' = all lots / earliest expiry first
+  const [expiry, setExpiry] = useState('')
+  const lot = lots.find(l => (l.lot_no || '') === lotKey && lotKey !== '')
+  const base = mode === 'count' && lot ? Number(lot.remaining) : Number(row.on_hand)
+  const delta = mode === 'count' ? (qty ?? base) - base : -(qty || 0)
 
   async function save(e) {
     e.preventDefault()
     if (!delta) return onClose()
     try {
-      await q(db.from('stock_movements').insert({
-        [kind === 'material' ? 'material_id' : 'product_id']: row.id,
-        qty: delta, reason: mode === 'count' ? 'count' : 'waste', note: note || null,
+      await q(db.rpc('adjust_stock', {
+        p_kind: kind, p_id: row.id, p_mode: mode, p_qty: qty ?? base, p_note: note || null,
+        p_lot: kind === 'material' && lotKey ? lotKey : null,
+        p_expiry: kind === 'material' && mode === 'count' && !lotKey && expiry ? expiry : null,
       }))
       toast(t('saved')); onDone()
     } catch (err) { toast(errText(err), 'error') }
@@ -91,12 +126,24 @@ function Adjust({ kind, row, onClose, onDone }) {
     <Modal title={`${t('adjust')} · ${t.pick(row)}`} onClose={onClose}>
       <form onSubmit={save} className="stack">
         <Tabs value={mode} onChange={m => { setMode(m); setQty(null) }} tabs={[['count', t('r_count')], ['waste', t('waste')]]} />
-        <p className="muted">{t('onHand')}: <b>{fmtNum(row.on_hand, t.lang)} {row.unit}</b></p>
+        <p className="muted">{t('onHand')}: <b>{fmtNum(base, t.lang)} {row.unit}</b></p>
+        {kind === 'material' && lots.filter(l => l.lot_no).length > 0 && (
+          <Field label={t('lot')} hint={lotKey ? '' : t(mode === 'count' ? 'countAllLotsHint' : 'fifoHint')}>
+            <select value={lotKey} onChange={e => setLotKey(e.target.value)}>
+              <option value="">{t(mode === 'count' ? 'allLots' : 'fifoAuto')}</option>
+              {lots.filter(l => l.lot_no).map(l => <option key={l.lot_no} value={l.lot_no}>
+                {l.lot_no} · {fmtNum(l.remaining, t.lang)} {row.unit}{l.expiry_date ? ` · ${fmtDate(l.expiry_date, t.lang)}` : ''}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label={mode === 'count' ? t('newCount') : t('qty')}>
           <NumInput value={qty} onChange={setQty} required min={0} />
         </Field>
+        {kind === 'material' && mode === 'count' && !lotKey && delta > 0 && (
+          <Field label={t('expiry')} hint={t('countUpHint')}><input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} /></Field>
+        )}
         <Field label={t('notes')}><input value={note} onChange={e => setNote(e.target.value)} /></Field>
-        <p className={delta < 0 ? 'neg' : 'pos'}>{delta > 0 ? '+' : ''}{fmtNum(delta, t.lang)} {row.unit}</p>
+        <p className={delta < 0 ? 'neg' : delta > 0 ? 'pos' : 'muted'}>{delta > 0 ? '+' : ''}{fmtNum(delta || 0, t.lang)} {row.unit}</p>
         <div className="modal-foot">
           <span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
@@ -131,4 +178,12 @@ function Movements({ data }) {
       })}</tbody>
     </table></div>
   )
+}
+
+export function ExpiryTag({ date, days }) {
+  const t = useT()
+  const cls = days < 0 ? 'tag tag-expired' : days <= 14 ? 'tag tag-soon' : 'muted'
+  return <span className={cls} title={fmtDate(date, t.lang)}>
+    {fmtDate(date, t.lang)}{days < 0 ? ` · ${t('expired')}` : days <= 14 ? ` · ${t('daysLeft', { n: days })}` : ''}
+  </span>
 }

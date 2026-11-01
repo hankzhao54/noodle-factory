@@ -104,7 +104,7 @@ export function Tabs({ tabs, value, onChange }) {
   return (
     <div className="tabs" role="tablist">
       {tabs.map(([k, label]) => (
-        <button key={k} role="tab" aria-selected={value === k}
+        <button key={k} type="button" role="tab" aria-selected={value === k}
           className={value === k ? 'tab on' : 'tab'} onClick={() => onChange(k)}>{label}</button>
       ))}
     </div>

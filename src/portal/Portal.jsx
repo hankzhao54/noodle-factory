@@ -6,6 +6,8 @@ import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { LangSwitch } from '../App'
 import { Loading, ErrorBox, Empty, Status, Tabs, useToast, errText } from '../components/ui'
 import QtyPicker, { cartTotal } from '../components/QtyPicker'
+import { dateProblem, nextDates, deliveryDays, dayName } from '../lib/orderRules'
+import InstallHint from '../components/InstallHint'
 
 export default function Portal() {
   const t = useT()
@@ -13,12 +15,13 @@ export default function Portal() {
   const [tab, setTab] = useState('order')
   const [qty, setQty] = useState({})
   const { data, error, reload } = useData(async () => {
-    const [me, catalog, orders] = await Promise.all([
+    const [me, catalog, orders, rules] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
       q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.rpc('order_rules')).catch(() => null),
     ])
-    return { me, catalog, orders }
+    return { me, catalog, orders, rules }
   })
 
   return (
@@ -27,12 +30,13 @@ export default function Portal() {
         <div className="portal-brand"><img src="/icon.svg" alt="" width="28" height="28" /><span>{data?.me?.name || t('appName')}</span></div>
         <div className="portal-tools"><LangSwitch /><button className="btn-link" onClick={signOut}>{t('signOut')}</button></div>
       </header>
+      <InstallHint />
       <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')]]} />
       <ErrorBox error={error} />
       {!data ? <Loading /> : !profile?.customer_id || !data.me ? (
         <p className="note-box">{t('noCustomerLink')}</p>
       ) : tab === 'order' ? (
-        <OrderSheet internal={isRestaurant} catalog={data.catalog} me={data.me} qty={qty} setQty={setQty}
+        <OrderSheet internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
           onPlaced={() => { setQty({}); reload(); setTab('history') }} />
       ) : (
         <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} reload={reload}
@@ -46,10 +50,12 @@ export default function Portal() {
   )
 }
 
-function OrderSheet({ internal, catalog, me, qty, setQty, onPlaced }) {
+function OrderSheet({ internal, catalog, me, rules, qty, setQty, onPlaced }) {
   const t = useT()
   const toast = useToast()
-  const [date, setDate] = useState(todayISO(1))
+  const options = nextDates(rules, 6)
+  const [date, setDate] = useState(() => options[0] || todayISO(1))
+  const problem = dateProblem(rules, date)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const total = cartTotal(catalog, qty)
@@ -63,14 +69,29 @@ function OrderSheet({ internal, catalog, me, qty, setQty, onPlaced }) {
         p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q })),
       }))
       toast(t(internal ? 'orderPlacedInternal' : 'orderPlaced')); setNotes(''); onPlaced()
-    } catch (e) { toast(errText(e), 'error') } finally { setBusy(false) }
+    } catch (e) {
+      const m = /delivery date not allowed: (\w+)/.exec(e?.message || '')
+      toast(m ? t('dp_' + m[1]) : errText(e), 'error')
+    } finally { setBusy(false) }
   }
+  const days = rules ? deliveryDays(rules).map(d => dayName(t.lang, d)).join(', ') : ''
 
   return (
     <div className="order-sheet">
       <div className="sheet-head">
-        <label className="field"><span className="field-label">{t('deliveryDate')}</span>
-          <input type="date" min={todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
+        <span className="field-label">{t('deliveryDate')}</span>
+        {options.length > 0 && (
+          <div className="date-chips" role="radiogroup" aria-label={t('deliveryDate')}>
+            {options.map(d => (
+              <button key={d} type="button" role="radio" aria-checked={d === date}
+                className={d === date ? 'chip on' : 'chip'} onClick={() => setDate(d)}>{fmtDate(d, t.lang)}</button>
+            ))}
+          </div>
+        )}
+        <label className="field date-other"><span className="muted small">{t('otherDate')}</span>
+          <input type="date" min={rules?.earliest || todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
+        {problem && <p className="error-box small">{t('dp_' + problem)}</p>}
+        {rules && <p className="muted small">{t('rulesNote', { cutoff: rules.cutoff || '–', days })}</p>}
         {me.address && <p className="muted small">{me.address}</p>}
       </div>
       {catalog.length === 0 ? <Empty /> : <QtyPicker items={catalog} qty={qty} setQty={setQty} />}
@@ -81,7 +102,7 @@ function OrderSheet({ internal, catalog, me, qty, setQty, onPlaced }) {
           <b>{internal ? t('itemsN', { n: count }) : fmtFt(total, t.lang)}</b>
           <span className="muted small">{internal ? (count ? t('internalOrderNote') : t('emptyCart')) : <>{count ? t('itemsN', { n: count }) : t('emptyCart')} · {t('noPayment')}</>}</span>
         </div>
-        <button className="btn btn-primary" disabled={!count || busy} onClick={place}>{t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!count || busy || !!problem} onClick={place}>{t('placeOrder')}</button>
       </div>
     </div>
   )

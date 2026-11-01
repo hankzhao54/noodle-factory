@@ -5,6 +5,7 @@ import { useT, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import { Link } from 'react-router-dom'
 import LabelPrint from '../components/LabelPrint'
+import { buildPlan, materialNeeds } from '../lib/plan'
 
 export default function Production() {
   const t = useT()
@@ -30,24 +31,15 @@ export default function Production() {
   if (!data) return <div className="page"><ErrorBox error={error} /></div>
 
   const prod = id => data.products.find(p => p.id === id) || {}
-  const mat = id => data.mstock.find(m => m.id === id) || {}
   const open = data.batches.filter(b => b.status === 'planned')
 
   // plan rows: open orders due on/before the date, minus stock, minus batches already planned
-  const plan = data.products.map(p => {
-    const demand = data.demand.filter(d => d.product_id === p.id).reduce((s, d) => s + Number(d.qty), 0)
-    const onHand = Number(data.pstock.find(s => s.id === p.id)?.on_hand || 0)
-    const planned = open.filter(b => b.product_id === p.id).reduce((s, b) => s + b.batches * p.batch_yield, 0)
-    const toMake = Math.max(0, demand - onHand - planned)
-    return { p, demand, onHand, planned, toMake, suggest: toMake > 0 ? Math.ceil(toMake / (p.batch_yield || 1)) : 0 }
-  }).filter(r => r.demand > 0 || r.planned > 0)
+  const plan = buildPlan(data)
 
   // materials needed for all open batches vs stock
-  const need = {}
-  open.forEach(b => data.recipe.filter(r => r.product_id === b.product_id)
-    .forEach(r => { need[r.material_id] = (need[r.material_id] || 0) + r.qty_per_batch * b.batches }))
-  const needRows = Object.entries(need).map(([id, qty]) => ({ m: mat(id), qty, short: qty - Number(mat(id).on_hand || 0) }))
-    .sort((a, b) => b.short - a.short)
+  const byProduct = {}
+  open.forEach(b => { byProduct[b.product_id] = (byProduct[b.product_id] || 0) + Number(b.batches) })
+  const needRows = materialNeeds(byProduct, data.recipe, data.mstock)
 
   const shown = data.batches.filter(b => tab === 'all' || b.status === tab)
 
