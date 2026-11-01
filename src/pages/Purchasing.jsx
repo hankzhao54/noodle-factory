@@ -3,12 +3,14 @@ import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
+import ReceiveLabels from '../components/ReceiveLabels'
 
 export default function Purchasing() {
   const t = useT()
   const toast = useToast()
   const [filter, setFilter] = useState('open')
   const [open, setOpen] = useState(null)        // PO being edited / received
+  const [labelsFor, setLabelsFor] = useState(null)  // PO id to print goods-in labels for
   const { data, loading, error, reload } = useData(async () => {
     const [pos, suppliers, materials, low] = await Promise.all([
       q(db.from('purchase_orders').select('*, purchase_order_lines(qty, unit_price)').order('created_at', { ascending: false }).limit(200)),
@@ -85,12 +87,15 @@ export default function Purchasing() {
       )}
 
       {open && <POEditor po={open} data={data} supName={supName}
-        onClose={() => setOpen(null)} onDone={async () => { setOpen(null); await reload() }} />}
+        onClose={() => setOpen(null)}
+        onDone={async printId => { setOpen(null); await reload(); if (printId) setLabelsFor(printId) }}
+        onPrint={id => { setOpen(null); setLabelsFor(id) }} />}
+      {labelsFor && <ReceiveLabels poId={labelsFor} onClose={() => setLabelsFor(null)} />}
     </div>
   )
 }
 
-function POEditor({ po, data, supName, onClose, onDone }) {
+function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
   const t = useT()
   const toast = useToast()
   const [head, setHead] = useState({ supplier_id: po.supplier_id, order_date: po.order_date, expected_date: po.expected_date || '', notes: po.notes || '' })
@@ -104,6 +109,7 @@ function POEditor({ po, data, supName, onClose, onDone }) {
   const mat = id => data.materials.find(m => m.id === id) || {}
   const setLine = (i, patch) => setLines(L.map((l, j) => j === i ? { ...l, ...patch } : l))
   const [busy, setBusy] = useState(false)
+  const [printAfter, setPrintAfter] = useState(true)
 
   async function persist(status) {
     const payload = { ...head, expected_date: head.expected_date || null, ...(status ? { status } : {}) }
@@ -138,7 +144,7 @@ function POEditor({ po, data, supName, onClose, onDone }) {
         return { line_id: f.id, received_qty: l.received_qty ?? l.qty, lot_no: l.lot_no || '', expiry_date: l.expiry_date || '' }
       })
       await q(db.rpc('receive_purchase_order', { p_po_id: po.id, p_lines: payload }))
-      toast(t('po_received')); onDone()
+      toast(t('po_received')); onDone(printAfter ? po.id : null)
     } catch (e) { toast(errText(e), 'error'); setBusy(false) }
   }
 
@@ -195,6 +201,8 @@ function POEditor({ po, data, supName, onClose, onDone }) {
 
       <div className="modal-foot">
         {po.id && editable && <button className="btn btn-danger-quiet" disabled={busy} onClick={() => save('cancelled')}>{t('cancelOrder')}</button>}
+        {po.status === 'received' && <button className="btn" onClick={() => onPrint(po.id)}>{t('printLabels')}</button>}
+        {receiving && <label className="check-inline"><input type="checkbox" checked={printAfter} onChange={e => setPrintAfter(e.target.checked)} />{t('printAfterReceive')}</label>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
         {editable && <button className="btn" disabled={busy} onClick={() => save()}>{t('save')}</button>}

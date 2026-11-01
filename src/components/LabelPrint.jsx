@@ -391,7 +391,7 @@ export function drawSimpleLabel(props) {
 
   // QR (optional): whole-pixel modules so it stays sharp on a 300 dpi head
   let x0 = Math.round(pad)
-  if (props.showQr) {
+  if (props.showQr && lot) {
     const qr = QRCode.create(traceUrl(lot), { errorCorrectionLevel: 'M' })
     const n = qr.modules.size
     const cell = Math.max(1, Math.floor((Math.min(h * 0.6, w * 0.27, h - 2) * PX_PER_MM) / n))
@@ -405,7 +405,8 @@ export function drawSimpleLabel(props) {
 
   // text: the biggest size at which every line fits (condensed face, like the OkoHACCP font)
   const maxW = W - x0 - pad, maxH = H - 2 * pad
-  const lines = simpleLines(props)
+  // textLines: [{ text, bold }] given directly (e.g. goods-in labels); otherwise the product label lines
+  const lines = props.textLines || simpleLines(props)
   const fontOf = (l, px) => `condensed ${l.bold ? 700 : 500} ${l.bold ? px * 1.05 : px}px ${FONT}`
   let pt = 24, px, lh
   for (; pt >= 4.5; pt = Math.round((pt - 0.2) * 10) / 10) {
