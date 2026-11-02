@@ -23,6 +23,7 @@ import LabelSettings from './pages/LabelSettings'
 import EmailSettings from './pages/EmailSettings'
 import RuleSettings from './pages/RuleSettings'
 import Reports from './pages/Reports'
+import PriceTiers from './pages/PriceTiers'
 
 export default function App() {
   const [lang, setLangState] = useState(() => localStorage.getItem('nf-lang') || 'hu')
@@ -83,7 +84,7 @@ function StaffShell() {
   ]
   const setup = [
     ['/products', 'nav_products'], ['/materials', 'nav_materials'], ['/suppliers', 'nav_suppliers'],
-    ['/customers', 'nav_customers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(isAdmin ? [['/users', 'nav_users']] : []),
+    ['/customers', 'nav_customers'], ['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(isAdmin ? [['/users', 'nav_users']] : []),
   ]
   return (
     <div className={`shell ${open ? 'nav-open' : ''}`}>
@@ -126,6 +127,7 @@ function StaffShell() {
           <Route path="/email-settings" element={<EmailSettings />} />
           <Route path="/rules" element={<RuleSettings />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/price-tiers" element={<PriceTiers />} />
           {isAdmin && <Route path="/users" element={<Users />} />}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

@@ -10,6 +10,8 @@ import { dayName } from '../lib/orderRules'
 export default function Customers() {
   const t = useT()
   const { isAdmin } = useAuth()
+  const { data: tiers } = useData(() => q(db.from('price_tiers').select('id,name').order('sort').order('name')))
+  const tierName = id => tiers?.find(x => x.id === id)?.name
   return (
     <CrudPage table="customers" title={t('nav_customers')} order="name"
       searchKeys={['name', 'contact_person', 'phone', 'address']}
@@ -17,6 +19,7 @@ export default function Customers() {
       columns={[
         { key: 'name', label: t('name'), render: r => <b>{r.name}</b> },
         { key: 'type', label: t('ctype'), render: r => <span className={`tag tag-${r.type}`}>{t(r.type)}</span> },
+        { key: 'price_tier_id', label: t('priceTier'), render: r => tierName(r.price_tier_id) || <span className="muted">{t('basePrice')}</span> },
         { key: 'contact_person', label: t('contact') },
         { key: 'phone', label: t('phone') },
         { key: 'address', label: t('address') },
@@ -26,6 +29,8 @@ export default function Customers() {
         { key: 'name', label: t('name'), required: true },
         { key: 'type', label: t('ctype'), type: 'select', required: true, options: [['internal', t('internal')], ['wholesale', t('wholesale')]] },
         { key: 'contact_person', label: t('contact') },
+        ...(isAdmin ? [{ key: 'price_tier_id', label: t('priceTier'), type: 'select', hint: t('priceTierHint'),
+                         options: (tiers || []).map(x => [x.id, x.name]) }] : []),
         { key: 'phone', label: t('phone') },
         { key: 'email', label: t('email') },
         { key: 'vat_no', label: t('vatNo') },
@@ -43,11 +48,15 @@ function PriceEditor({ customerId }) {
   const t = useT()
   const toast = useToast()
   const { data } = useData(async () => {
-    const [products, prices] = await Promise.all([
+    const [products, prices, effective] = await Promise.all([
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price').eq('active', true).order('sort')),
       q(db.from('customer_prices').select('*').eq('customer_id', customerId)),
+      q(db.rpc('prices_for_customer', { p_customer: customerId })),
     ])
-    return { products, prices: Object.fromEntries(prices.map(p => [p.product_id, p.price])) }
+    // price without the customer's own price: tier price if set, else base
+    const tierPrice = {}
+    effective.forEach(e => { if (e.source === 'tier') tierPrice[e.product_id] = e.price })
+    return { products, prices: Object.fromEntries(prices.map(p => [p.product_id, p.price])), tierPrice }
   }, [customerId])
   const [edits, setEdits] = useState({})
   if (!data) return null
@@ -66,16 +75,18 @@ function PriceEditor({ customerId }) {
       <h3>{t('prices')}</h3>
       <p className="muted small">{t('pricesHint')}</p>
       <table className="table compact">
-        <thead><tr><th>{t('name')}</th><th className="num">{t('basePrice')}</th><th className="num">{t('price')}</th></tr></thead>
+        <thead><tr><th>{t('name')}</th><th className="num">{t('basePrice')}</th><th className="num">{t('tierPrice')}</th><th className="num">{t('ownPrice')}</th></tr></thead>
         <tbody>
           {data.products.map(p => {
             const cur = p.id in edits ? edits[p.id] : data.prices[p.id]
+            const fallback = data.tierPrice[p.id] ?? p.base_price
             return (
               <tr key={p.id}>
                 <td>{t.pick(p)} <span className="muted">/ {p.unit}</span></td>
                 <td className="num muted">{fmtFt(p.base_price, t.lang)}</td>
+                <td className="num muted">{data.tierPrice[p.id] != null ? fmtFt(data.tierPrice[p.id], t.lang) : '–'}</td>
                 <td className="num">
-                  <NumInput className="input-sm" value={cur} placeholder={String(p.base_price)}
+                  <NumInput className="input-sm" value={cur} placeholder={String(Number(fallback))}
                     onChange={x => setEdits(s => ({ ...s, [p.id]: x }))} onBlur={() => p.id in edits && saveOne(p.id)} />
                 </td>
               </tr>

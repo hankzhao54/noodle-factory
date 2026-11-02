@@ -114,7 +114,7 @@ function NewOrder({ customers, products, onClose, onDone }) {
   const [notes, setNotes] = useState('')
   const [qty, setQty] = useState({})
   const { data: prices } = useData(() => customerId
-    ? q(db.from('customer_prices').select('*').eq('customer_id', customerId)) : Promise.resolve([]), [customerId])
+    ? q(db.rpc('prices_for_customer', { p_customer: customerId })) : Promise.resolve([]), [customerId])
   const items = products.filter(p => p.active).map(p => ({
     ...p, price: prices?.find(x => x.product_id === p.id)?.price ?? p.base_price,
   }))

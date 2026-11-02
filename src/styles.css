@@ -452,3 +452,5 @@ textarea { resize: vertical; }
 .btn-danger { background: var(--short); border-color: var(--short); color: #fff; }
 .btn-danger:hover { filter: brightness(0.95); }
 .btn-danger:disabled { opacity: 0.5; }
+.tier-table th .tier-head { font-weight: 650; color: var(--ink); padding: 0; }
+.tier-table th .tier-count { font-weight: 400; }

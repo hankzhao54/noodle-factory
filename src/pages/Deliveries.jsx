@@ -357,7 +357,7 @@ function NewDelivery({ date, ctx, onClose }) {
   const [busy, setBusy] = useState(false)
   const c = ctx.data.customers.find(x => x.id === customerId)
   const { data: prices } = useData(() => customerId
-    ? q(db.from('customer_prices').select('product_id,price').eq('customer_id', customerId)) : Promise.resolve([]), [customerId])
+    ? q(db.rpc('prices_for_customer', { p_customer: customerId })) : Promise.resolve([]), [customerId])
   const { data: runs } = useData(() => q(db.from('deliveries').select('*').eq('delivery_date', deliveryDate).neq('status', 'done').order('created_at')), [deliveryDate])
 
   const items = ctx.data.products.filter(p => p.active).map(p => {
