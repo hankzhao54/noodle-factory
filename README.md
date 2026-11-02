@@ -26,7 +26,7 @@
 | 产品与配方 | 产品三语名称、图片、规格、保质期、标准价（产品图片也显示在客户下单页）；每批用料配方，自动算每批成本、单位成本、毛利率 |
 | 原料 / 供应商 | 基础资料，原料带过敏原，可上传图片（手机可直接拍照，自动压缩到 1200 px）；名称三语，常用分类（面粉、淀粉、辅料、蛋、包装…）按界面语言显示，也可自己写新分类 |
 | 客户 | 自家餐厅 / 外部批发；每个客户可设专属价格（管理员）；可关联拉面馆名单 `sales.ramen_leads` 的 place_id |
-| 账号 | 管理员开通账号、设角色、把客户账号对应到客户 |
+| 账号 | 管理员开通账号、设角色、把客户账号对应到客户；可以直接「添加账号」（邮箱 + 初始密码，建好就能登录，不用审批）和删除账号。登录账号和 order-app、配方 app 共用：只用于面坊的账号会被彻底删除，其他 app 也在用的只移除面坊权限。不能删自己和最后一个管理员。服务器函数 `noodle-admin-users` |
 
 **客户门户**（手机优先）：客户登录后只能看到可订产品和自己的价格，下单、看历史订单、新订单可自行取消、一键再来一单。不含付款（货到后开发票）。
 
@@ -44,7 +44,7 @@
 
 1. **建表**：Supabase → SQL Editor，运行 `supabase/001_noodle_schema.sql`
 2. **开放 schema**：Settings → API → Exposed schemas，加上 `noodle`（和之前的 `ordering` 一样）
-3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`
+3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`、`014_admin_users.sql`
 4. （可选）运行 `supabase/002_demo_data.sql` 装演示数据，文件底部有一键删除的 SQL
 5. **本地运行**：
    ```

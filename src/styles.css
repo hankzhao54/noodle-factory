@@ -449,3 +449,6 @@ textarea { resize: vertical; }
 .bar { height: 4px; background: var(--line-2); border-radius: 4px; margin-top: 4px; min-width: 60px; }
 .bar span { display: block; height: 100%; background: var(--kansui, #E3B12C); border-radius: 4px; }
 .pad-x { padding: 0 14px; margin: 8px 0; }
+.btn-danger { background: var(--short); border-color: var(--short); color: #fff; }
+.btn-danger:hover { filter: brightness(0.95); }
+.btn-danger:disabled { opacity: 0.5; }
