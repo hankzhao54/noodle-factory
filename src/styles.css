@@ -454,3 +454,9 @@ textarea { resize: vertical; }
 .btn-danger:disabled { opacity: 0.5; }
 .tier-table th .tier-head { font-weight: 650; color: var(--ink); padding: 0; }
 .tier-table th .tier-count { font-weight: 400; }
+.pc-print summary { cursor: pointer; list-style: none; }
+.pc-print summary::-webkit-details-marker { display: none; }
+.pc-print summary h2::after { content: ' ▾'; color: var(--ink-3); font-weight: 400; }
+.pc-print[open] summary h2::after { content: ' ▴'; }
+.pc-steps { margin: 0; padding-left: 34px; line-height: 1.6; }
+.pc-steps li { margin: 4px 0; }

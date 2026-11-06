@@ -73,7 +73,8 @@ export function traceUrl(lot) {
   return `${window.location.origin}/trace/${encodeURIComponent(lot)}`
 }
 
-export default function LabelPrint({ batchId, onClose }) {
+// sampleProductId: print a test label for that product (no batch, nothing is saved)
+export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const t = useT()
   const toast = useToast()
   const { isAdmin, profile } = useAuth()
@@ -95,15 +96,19 @@ export default function LabelPrint({ batchId, onClose }) {
   const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v3', n); return n })
 
   const { data, error } = useData(async () => {
-    const batch = await q(db.from('production_batches').select('*').eq('id', batchId).single())
+    const now = new Date()
+    const batch = batchId
+      ? await q(db.from('production_batches').select('*').eq('id', batchId).single())
+      : { id: null, no: 0, product_id: sampleProductId, batches: 1, status: 'done', actual_qty: null, done_at: now.toISOString(),
+          lot_no: `TEST-${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}` }
     const [product, lines, cfg, out] = await Promise.all([
       q(db.from('products').select('*').eq('id', batch.product_id).single()),
       q(db.from('recipe_lines').select('qty_per_batch, materials(name_zh,name_en,name_hu,unit,allergens,on_label)').eq('product_id', batch.product_id)),
       q(db.from('settings').select('key,value')),
-      q(db.from('stock_movements').select('expiry_date').eq('ref_id', batchId).eq('reason', 'production_out').limit(1)),
+      batchId ? q(db.from('stock_movements').select('expiry_date').eq('ref_id', batchId).eq('reason', 'production_out').limit(1)) : Promise.resolve([]),
     ])
     return { batch, product, lines, cfg: Object.fromEntries(cfg.map(r => [r.key, r.value || ''])), expiry: out[0]?.expiry_date }
-  }, [batchId])
+  }, [batchId, sampleProductId])
 
   useEffect(() => { if (data && !settings) setSettings(data.cfg) }, [data, settings])
   // default quantity per label, in kg: the product's preset (Címke beállítások),

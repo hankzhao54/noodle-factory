@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { db, q } from '../lib/supabase'
+import LabelPrint from '../components/LabelPrint'
 import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtNum } from '../lib/i18n'
@@ -10,6 +12,8 @@ export default function LabelSettings() {
   const t = useT()
   const toast = useToast()
   const { isAdmin } = useAuth()
+  const [testFor, setTestFor] = useState(null)
+  const [testPick, setTestPick] = useState('')
   const { data, error, reload } = useData(async () => {
     const [products, cfg] = await Promise.all([
       q(db.from('products').select('id,code,name_zh,name_en,name_hu,unit,shelf_life_days,label_qty_kg,active,sort').eq('active', true).order('sort')),
@@ -32,8 +36,24 @@ export default function LabelSettings() {
 
   return (
     <div className="page">
-      <PageHead title={t('nav_labelSettings')} />
+      <PageHead title={t('nav_labelSettings')}>
+        <span className="row-gap nowrap">
+          <select value={testPick || data.products[0]?.id || ''} onChange={e => setTestPick(e.target.value)} aria-label={t('testLabelProduct')}>
+            {data.products.map(p => <option key={p.id} value={p.id}>{t.pick(p)}</option>)}
+          </select>
+          <button className="btn" disabled={!data.products.length} onClick={() => setTestFor(testPick || data.products[0]?.id)}>{t('testLabel')}</button>
+        </span>
+      </PageHead>
       <p className="muted lead">{t('lsIntro')}</p>
+      {testFor && <LabelPrint sampleProductId={testFor} onClose={() => setTestFor(null)} />}
+
+      <details className="panel pc-print">
+        <summary className="panel-head"><h2>{t('pcPrintTitle')}</h2></summary>
+        <ol className="pad pc-steps">
+          {['pcStep1', 'pcStep2', 'pcStep3', 'pcStep4', 'pcStep5'].map(k => <li key={k}>{t(k)}</li>)}
+        </ol>
+        <p className="muted small pad-x">{t('pcPrintNote')}</p>
+      </details>
 
       <section className="panel">
         <div className="panel-head"><h2>{t('lsDefaults')}</h2>{!isAdmin && <span className="muted small">{t('lsAdminOnly')}</span>}</div>
