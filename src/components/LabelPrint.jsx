@@ -34,7 +34,7 @@ const ALLERGEN = {
   lupin: ['csillagfürt', 'lupin', '羽扇豆'], sulphites: ['kén-dioxid, szulfitok', 'sulphites', '亚硫酸盐'],
 }
 const LI = { hu: 0, en: 1, zh: 2 }
-function allergenName(raw, lang) {
+export function allergenName(raw, lang) {
   const k = String(raw).trim().toLowerCase()
   for (const [key, names] of Object.entries(ALLERGEN)) {
     if (key === k || names.some(n => n.toLowerCase() === k)) return names[LI[lang]]
@@ -79,7 +79,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const toast = useToast()
   const { isAdmin, profile } = useAuth()
   const [opt, setOpt] = useState(() => ({
-    size: 'dk22205', length: 32, lang: 'hu', ingredients: true, cw: 62, ch: 32, template: 'simple', showQr: false,
+    size: 'dk22205', length: 32, lang: 'hu', ingredients: true, cw: 62, ch: 32, template: 'simple', showQr: false, showStorage: true, showProducer: true,
     ...read('nf-label-v3', {}),
   }))
   const [recorder, setRecorder] = useState(profile?.display_name || '')
@@ -250,7 +250,8 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
 
   const simple = opt.template === 'simple'
   const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h,
-                  simple, recorder, amount, unit, showQr: !!opt.showQr }
+                  simple, recorder, amount, unit, showQr: !!opt.showQr,
+                  showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false }
   const idFor = i => copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
   const scale = Math.min(1.8, 300 / w)
 
@@ -281,6 +282,9 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
           </Field>
           {simple ? <>
             <label className="check-inline"><input type="checkbox" checked={!!opt.showQr} onChange={e => set({ showQr: e.target.checked })} />{t('showQr')}</label>
+            <label className="check-inline"><input type="checkbox" checked={opt.showStorage !== false} onChange={e => set({ showStorage: e.target.checked })} />{t('showStorage')}
+              {!data.product.storage && <span className="tag tag-low">{t('missing')}</span>}</label>
+            <label className="check-inline"><input type="checkbox" checked={opt.showProducer !== false} onChange={e => set({ showProducer: e.target.checked })} />{t('showProducer')}</label>
             <Field label={t('recorder')}><input value={recorder} onChange={e => setRecorder(e.target.value)} /></Field>
             <p className="muted small">
               {t('useByFrom', { n: shelfDays(data.product, settings) ?? '–' })}{' '}
@@ -297,7 +301,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
           </> : <label className="check-inline"><input type="checkbox" checked={opt.ingredients} onChange={e => set({ ingredients: e.target.checked })} />{t('showIngredients')}</label>}
           <Field label={t('copies')} hint={copies > 1 ? t('copiesIdHint', { a: idFor(0), b: idFor(copies - 1) }) : null}><NumInput value={copies} min={1} max={200} onChange={v => setCopies(v)} /></Field>
 
-          {!simple && <details className="label-producer">
+          {<details className="label-producer">
             <summary>{t('producerInfo')}{!settings.label_producer && <span className="tag tag-low">{t('missing')}</span>}</summary>
             <Field label={t('producerName')}><input value={settings.label_producer} disabled={!isAdmin} onChange={e => setSettings(s => ({ ...s, label_producer: e.target.value }))} /></Field>
             <Field label={t('producerAddress')}><input value={settings.label_address} disabled={!isAdmin} onChange={e => setSettings(s => ({ ...s, label_address: e.target.value }))} /></Field>
@@ -370,7 +374,7 @@ export const labelFontsReady = () => Promise.all([
   'condensed 500 40px "Archivo Variable"', 'condensed 700 40px "Archivo Variable"',
 ].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
-function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId }) {
+function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId, showStorage, showProducer }) {
   const T = L[lang] || L.hu
   const produced = batch.done_at || batch.planned_date
   const useBy = addDays(produced, shelfDays(product, settings)) || expiry
@@ -381,6 +385,9 @@ function simpleLines({ product, batch, expiry, settings, lang, recorder, amount,
     { text: `${T.producedAt}: ${ymdhm(produced)}` },
     useBy && { text: `${T.useBy}: ${ymdhm(useBy)}` },
     amount > 0 && { text: `${T.qty}: ${fmtNum(amount, 'hu', 3)} ${T.units[unit] || unit}` },
+    showStorage && product.storage && { text: `${T.storage}: ${product.storage}` },
+    showProducer && settings?.label_producer && { text: `${T.producer}: ${settings.label_producer}` },
+    showProducer && settings?.label_address && { text: settings.label_address },
   ].filter(Boolean)
 }
 
@@ -429,7 +436,7 @@ function CanvasPreview(props) {
   const [src, setSrc] = useState('')
   const [fontTick, setFontTick] = useState(0)
   useEffect(() => { labelFontsReady().then(() => setFontTick(x => x + 1)) }, [])
-  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, fontTick])
+  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, props.showStorage, props.showProducer, props.settings?.label_producer, props.settings?.label_address, fontTick])
   useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
   return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
 }

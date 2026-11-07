@@ -35,6 +35,9 @@ export default function Materials() {
         { key: 'min_stock', label: t('minStock'), type: 'number' },
         { key: 'default_supplier_id', label: t('defaultSupplier'), type: 'select', options: (suppliers || []).map(s => [s.id, s.name]) },
         { key: 'allergens', label: t('allergens'), type: 'tags', hint: t('allergensHint') },
+        { key: 'ingredient_hu', label: t('ingredientHu'), hint: t('ingredientHint') },
+        { key: 'ingredient_en', label: t('ingredientEn') },
+        { key: 'ingredient_zh', label: t('ingredientZh') },
         { key: 'on_label', label: t('onLabel'), type: 'bool' },
         { key: 'active', label: t('active'), type: 'bool' },
       ]} />

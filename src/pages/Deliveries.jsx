@@ -4,6 +4,8 @@ import { supabase, db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate, fmtFt } from '../lib/i18n'
 import { compressImage } from '../lib/image'
+import { usePublicInfo } from '../lib/publicInfo'
+import { allergenName } from '../components/LabelPrint'
 import { Modal, Field, Loading, ErrorBox, PageHead, Status, NumInput, useToast, errText } from '../components/ui'
 
 export const PROOF_BUCKET = 'noodle-delivery-proofs'
@@ -16,14 +18,15 @@ export default function Deliveries() {
   const [modal, setModal] = useState(null)      // {kind, ...}
   const [printList, setPrintList] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
-    const [runs, orders, customers, products, stock] = await Promise.all([
+    const [runs, orders, customers, products, stock, pinfo] = await Promise.all([
       q(db.from('deliveries').select('*').eq('delivery_date', date).order('created_at')),
       q(db.from('orders').select('*, order_lines(*)').eq('delivery_date', date).neq('status', 'cancelled').order('created_at')),
       q(db.from('customers').select('*').order('name')),
       q(db.from('products').select('id,code,name_zh,name_en,name_hu,unit,base_price,active,sort').order('sort')),
       q(db.from('product_stock').select('id,on_hand,reserved')),
+      q(db.rpc('product_info')).catch(() => ({})),
     ])
-    return { runs, orders, customers, products, stock }
+    return { runs, orders, customers, products, stock, pinfo: pinfo || {} }
   }, [date])
 
   useEffect(() => {
@@ -90,7 +93,7 @@ export default function Deliveries() {
 
       {printList && createPortal(
         <div className="print-only">
-          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={cust(o.customer_id)} prod={prod} run={run(o.delivery_id)} />)}
+          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={cust(o.customer_id)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} />)}
         </div>, document.body)}
     </div>
   )
@@ -486,8 +489,18 @@ function RunForm({ date, run, onClose, onDone }) {
 }
 
 /* ---------------- printable delivery note ---------------- */
-function DeliveryNote({ order: o, customer: c, prod, run }) {
+// ingredients + allergens per product, always in Hungarian (food information for the buyer)
+function ingrLine(pi) {
+  if (!pi?.ingredients?.length) return null
+  return <p className="dnote-ingr"><span>Összetevők: </span>{pi.ingredients.map((x, i) => (
+    <span key={i}>{i ? ', ' : ''}{x.allergen ? <b>{x.hu}</b> : x.hu}</span>))}
+    {pi.allergens?.length > 0 && <> · <span>Allergének: </span><b>{pi.allergens.map(a => allergenName(a, 'hu')).join(', ')}</b></>}
+    {pi.storage && <> · <span>Tárolás: </span>{pi.storage}</>}</p>
+}
+
+function DeliveryNote({ order: o, customer: c, prod, run, pinfo }) {
   const t = useT()
+  const info = usePublicInfo()
   const internal = c.type === 'internal'
   const delivered = o.status === 'delivered'
   const qtyOf = l => Number(delivered && l.delivered_qty != null ? l.delivered_qty : l.qty)
@@ -497,7 +510,9 @@ function DeliveryNote({ order: o, customer: c, prod, run }) {
       <header>
         <div>
           <h1>{t('deliveryNote')}</h1>
-          <p>{t('appName')}</p>
+          <p><b>{info?.company_name || t('appName')}</b></p>
+          {info?.company_address && <p>{info.company_address}</p>}
+          {info?.company_tax_no && <p>{t('vatNo')}: {info.company_tax_no}</p>}
         </div>
         <div className="dnote-meta">
           <p><b>#{o.no}</b></p>
@@ -513,18 +528,18 @@ function DeliveryNote({ order: o, customer: c, prod, run }) {
         {c.vat_no && <p>{t('vatNo')}: {c.vat_no}</p>}
       </section>
       <table>
-        <thead><tr><th>{t('name')}</th><th className="r">{t('qty')}</th>{!internal && <><th className="r">{t('price')}</th><th className="r">{t('total')}</th></>}</tr></thead>
+        <thead><tr><th>{t('name')}</th><th className="r">{t('qty')}</th>{!internal && <><th className="r">{t('price')} ({t('netPrice')})</th><th className="r">{t('total')} ({t('netPrice')})</th></>}</tr></thead>
         <tbody>{o.order_lines.map(l => {
           const p = prod(l.product_id)
           return (
             <tr key={l.id}>
-              <td>{t.pick(p)}{p.code ? ` (${p.code})` : ''}</td>
+              <td>{t.pick(p)}{p.code ? ` (${p.code})` : ''}{ingrLine(pinfo?.[l.product_id])}</td>
               <td className="r">{fmtNum(qtyOf(l), t.lang)} {p.unit}</td>
               {!internal && <><td className="r">{fmtFt(l.unit_price, t.lang)}</td><td className="r">{fmtFt(qtyOf(l) * l.unit_price, t.lang)}</td></>}
             </tr>
           )
         })}</tbody>
-        {!internal && <tfoot><tr><td colSpan={3}>{t('total')}</td><td className="r">{fmtFt(total, t.lang)}</td></tr></tfoot>}
+        {!internal && <tfoot><tr><td colSpan={3}>{t('total')} ({t('netPrice')})</td><td className="r">{fmtFt(total, t.lang)}</td></tr></tfoot>}
       </table>
       {(c.delivery_notes || o.notes) && <p className="dnote-notes">{[c.delivery_notes, o.notes].filter(Boolean).join(' · ')}</p>}
       <div className="dnote-sign">

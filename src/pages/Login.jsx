@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 import { LangSwitch } from '../App'
+import { LegalLinks } from '../legal/LegalPage'
 
 export default function Login() {
   const t = useT()
@@ -50,6 +51,7 @@ export default function Login() {
             {mode === 'in' ? t('noAccount') : t('haveAccount')}
           </button>
         </form>
+        <LegalLinks />
       </div>
     </div>
   )

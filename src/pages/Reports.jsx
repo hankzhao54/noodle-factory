@@ -13,8 +13,9 @@ export default function Reports() {
   const [from, setFrom] = useState(monthStart())
   const [to, setTo] = useState(todayISO())
   const { data, loading, error } = useData(async () => {
-    const [products, materials, customers, suppliers, batches, orders, moves, pos] = await Promise.all([
-      q(db.from('products').select('id,name_zh,name_en,name_hu,unit')),
+    const [products, pcost, materials, customers, suppliers, batches, orders, moves, pos] = await Promise.all([
+      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct')),
+      q(db.from('product_cost').select('product_id,unit_cost')),
       q(db.from('materials').select('id,name_zh,name_en,name_hu,unit,cost_per_unit')),
       q(db.from('customers').select('id,name,type')),
       q(db.from('suppliers').select('id,name')),
@@ -27,7 +28,7 @@ export default function Reports() {
       q(db.from('purchase_orders').select('supplier_id, received_at, purchase_order_lines(received_qty, qty, unit_price)')
         .eq('status', 'received').gte('received_at', from).lte('received_at', endOfDay(to))),
     ])
-    return { products, materials, customers, suppliers, batches, orders, moves, pos }
+    return { products, pcost, materials, customers, suppliers, batches, orders, moves, pos }
   }, [from, to])
 
   const presets = [
@@ -53,6 +54,7 @@ export default function Reports() {
 
 function ReportBody({ data, range }) {
   const t = useT()
+  const sorted0 = map => [...map.entries()].sort((a, b) => (b[1].theo || 0) - (a[1].theo || 0))
   const byId = (list, id) => list.find(x => x.id === id) || {}
   const add = (map, key, patch) => {
     const cur = map.get(key) || {}
@@ -63,7 +65,19 @@ function ReportBody({ data, range }) {
 
   // production
   const prod = new Map()
-  data.batches.forEach(b => add(prod, b.product_id, { qty: Number(b.actual_qty || 0), n: 1, batches: Number(b.batches) }))
+  data.batches.forEach(b => add(prod, b.product_id, { qty: Number(b.actual_qty || 0), n: 1, batches: Number(b.batches),
+    theo: Number(b.batches) * Number(byId(data.products, b.product_id).batch_yield || 0) }))
+  // production loss: theoretical output (batches × recipe yield) − actual output
+  const lossRows = sorted0(prod).map(([id, x]) => {
+    const p = byId(data.products, id), lost = x.theo - x.qty
+    const pct = x.theo ? lost / x.theo * 100 : 0
+    // value of the lost noodles at material cost per kg of theoretical output
+    const perTheo = Number(data.pcost.find(c => c.product_id === id)?.unit_cost || 0) * (1 - Number(p.loss_pct || 0) / 100)
+    return { p, x, lost, pct, val: lost * perTheo }
+  })
+  const lossTotal = lossRows.reduce((s, r) => s + r.lost, 0)
+  const lossVal = lossRows.reduce((s, r) => s + r.val, 0)
+  const theoTotal = lossRows.reduce((s, r) => s + r.x.theo, 0)
   // sales
   const byCust = new Map(), byProd = new Map()
   let revenue = 0, salesQty = 0
@@ -109,12 +123,19 @@ function ReportBody({ data, range }) {
         <Kpi label={t('kpiMaterialCost')} value={fmtFt(usedCost, t.lang)} sub={revenue > 0 ? `${Math.round(usedCost / revenue * 100)}% ${t('ofRevenue')}` : ''} />
         <Kpi label={t('kpiPurchases')} value={fmtFt(spend, t.lang)} />
         <Kpi label={t('kpiWaste')} value={fmtFt(wasteCost, t.lang)} />
+        <Kpi label={t('kpiLoss')} value={theoTotal ? `${fmtNum(lossTotal / theoTotal * 100, t.lang, 1)}%` : '–'} sub={`${fmtNum(lossTotal, t.lang)} kg · ${fmtFt(lossVal, t.lang)}`} />
       </div>
 
       <Section title={t('repProduction')} file={`production_${range}`}
         head={[t('name'), t('batchesDone'), t('batches'), t('actualQty')]}
         rows={sorted(prod, 'qty').map(([id, x]) => { const p = byId(data.products, id); return [t.pick(p), x.n, fmtNum(x.batches, t.lang), `${fmtNum(x.qty, t.lang)} ${p.unit || ''}`] })}
         bars={sorted(prod, 'qty').map(([, x]) => x.qty)} barCol={3} />
+
+      <Section title={t('repLoss')} note={t('repLossNote')} file={`production_loss_${range}`}
+        head={[t('name'), t('theoQty'), t('actualQty'), t('lossCol'), t('lossExpected'), t('lossValue')]}
+        rows={lossRows.map(r => [t.pick(r.p), `${fmtNum(r.x.theo, t.lang)} ${r.p.unit || ''}`, fmtNum(r.x.qty, t.lang),
+          `${fmtNum(r.lost, t.lang)} (${fmtNum(r.pct, t.lang, 1)}%)`, `${fmtNum(r.p.loss_pct || 0, t.lang, 1)}%`, fmtFt(r.val, t.lang)])}
+        bars={lossRows.map(r => Math.max(0, r.pct))} barCol={3} />
 
       <Section title={t('repSalesCustomer')} file={`sales_by_customer_${range}`}
         head={[t('customer'), t('qty'), t('revenueNet'), t('share')]}

@@ -5,8 +5,11 @@ import { useAuth } from '../lib/auth'
 import { useT, fmtDate } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, useToast, errText } from '../components/ui'
 import { parseDays, parseDates, nextDates, dayName } from '../lib/orderRules'
+import { refreshPublicInfo } from '../lib/publicInfo'
+import { LEGAL } from '../legal/LegalPage'
 
-const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'lot_expiry_warn_days']
+const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_email', 'company_phone', 'company_authority', 'terms_version']
+const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'lot_expiry_warn_days', ...COMPANY]
 
 // Ordering rules (cutoff, lead time, delivery weekdays, closed dates) and the lot expiry warning
 export default function RuleSettings() {
@@ -36,7 +39,7 @@ export default function RuleSettings() {
     try {
       const now = new Date().toISOString()
       await q(db.from('settings').upsert(KEYS.map(k => ({ key: k, value: String(clean[k] ?? ''), updated_at: now }))))
-      toast(t('saved')); reload()
+      refreshPublicInfo(); toast(t('saved')); reload()
     } catch (err) { toast(errText(err), 'error') }
   }
   const preview = nextDates({ ...data.rules, my_weekdays: null }, 6)
@@ -69,6 +72,18 @@ export default function RuleSettings() {
         <div className="form-grid pad">
           <label className="field"><span className="field-label">{t('rsWarnDays')}</span>
             <input type="number" min="0" max="365" value={v.lot_expiry_warn_days ?? ''} disabled={off} onChange={e => set('lot_expiry_warn_days', e.target.value)} /></label>
+        </div>
+        <div className="panel-head"><h2>{t('rsCompany')}</h2>
+          <span className="row-gap">{LEGAL.map(([k, label]) => <a key={k} className="small" href={`/legal/${k}`} target="_blank" rel="noopener">{t(label)}</a>)}</span></div>
+        <p className="muted small pad-x">{t('rsCompanyHint')}</p>
+        <div className="form-grid pad">
+          {COMPANY.map(k => (
+            <label key={k} className={`field ${k === 'company_address' ? 'span-2' : ''}`}><span className="field-label">{t('co_' + k)}</span>
+              <input value={v[k] || ''} disabled={off} onChange={e => set(k, e.target.value)} />
+              {k === 'terms_version' && <span className="field-hint">{t('termsVersionHint')}</span>}
+              {(k === 'company_reg_no' || k === 'company_tax_no') && !v[k] && <span className="field-hint warn">{t('missing')}</span>}
+            </label>
+          ))}
         </div>
         {!off && <div className="modal-foot pad"><span className="grow" />
           <button className="btn btn-primary" disabled={!dirty}>{t('save')}</button></div>}

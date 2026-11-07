@@ -36,6 +36,7 @@ export default function Products() {
         { key: 'unit', label: t('unit'), type: 'select', required: true, options: UNITS.map(u => [u, u]) },
         { key: 'pack_size_g', label: t('packSize'), type: 'number' },
         { key: 'batch_yield', label: t('batchYield'), type: 'number', required: true },
+        { key: 'loss_pct', label: t('lossPct'), type: 'number', hint: t('lossPctHint') },
         { key: 'base_price', label: t('basePrice'), type: 'number' },
         { key: 'min_order_qty', label: t('minOrder'), type: 'number' },
         { key: 'shelf_life_days', label: t('shelfLife'), type: 'number' },

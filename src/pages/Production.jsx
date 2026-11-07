@@ -5,7 +5,7 @@ import { useT, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import { Link } from 'react-router-dom'
 import LabelPrint from '../components/LabelPrint'
-import { buildPlan, materialNeeds } from '../lib/plan'
+import { buildPlan, materialNeeds, expYield, theoYield, lossPct } from '../lib/plan'
 
 export default function Production() {
   const t = useT()
@@ -17,7 +17,7 @@ export default function Production() {
   const [labelFor, setLabelFor] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
     const [products, recipe, mstock, pstock, demand, batches] = await Promise.all([
-      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,sort').eq('active', true).order('sort')),
+      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort').eq('active', true).order('sort')),
       q(db.from('recipe_lines').select('*')),
       q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand')),
       q(db.from('product_stock').select('id,on_hand')),
@@ -100,7 +100,7 @@ export default function Production() {
       {shown.length === 0 ? <Empty /> : (
         <div className="table-wrap"><table className="table">
           <thead><tr><th>#</th><th>{t('date')}</th><th>{t('name')}</th><th className="num">{t('batches')}</th>
-            <th className="num">{t('expectedQty')}</th><th className="num">{t('actualQty')}</th><th>{t('lot')}</th><th>{t('status')}</th><th /></tr></thead>
+            <th className="num">{t('expectedQty')}</th><th className="num">{t('actualQty')}</th><th className="num">{t('lossCol')}</th><th>{t('lot')}</th><th>{t('status')}</th><th /></tr></thead>
           <tbody>{shown.map(b => {
             const p = prod(b.product_id)
             return (
@@ -109,8 +109,9 @@ export default function Production() {
                 <td>{fmtDate(b.planned_date, t.lang)}</td>
                 <td><b>{t.pick(p)}</b></td>
                 <td className="num">{fmtNum(b.batches, t.lang)}</td>
-                <td className="num muted">{fmtNum(b.batches * (p.batch_yield || 0), t.lang)} {p.unit}</td>
+                <td className="num muted">{fmtNum(b.batches * expYield(p), t.lang)} {p.unit}</td>
                 <td className="num">{b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–'}</td>
+                <td className="num"><LossTag batch={b} product={p} /></td>
                 <td className="muted">{b.lot_no ? <Link to={`/trace/${encodeURIComponent(b.lot_no)}`}>{b.lot_no}</Link> : '–'}</td>
                 <td><Status value={b.status} prefix="b" /></td>
                 <td className="act">{b.status === 'done' && <button className="btn btn-sm" onClick={() => setLabelFor(b.id)}>{t('printLabels')}</button>}{b.status === 'planned' && <>
@@ -149,7 +150,7 @@ function AddBatch({ init, products, onClose, onDone }) {
           </select>
         </Field>
         <Field label={t('date')}><input type="date" value={v.planned_date} onChange={e => setV({ ...v, planned_date: e.target.value })} /></Field>
-        <Field label={t('batches')} hint={`${t('expectedQty')}: ${fmtNum((v.batches || 0) * (p.batch_yield || 0), t.lang)} ${p.unit || ''}`}>
+        <Field label={t('batches')} hint={`${t('expectedQty')}: ${fmtNum((v.batches || 0) * expYield(p), t.lang)} ${p.unit || ''}${Number(p.loss_pct) ? ` (−${fmtNum(p.loss_pct, t.lang)}%)` : ''}`}>
           <NumInput value={v.batches} onChange={x => setV({ ...v, batches: x })} required min={0.1} />
         </Field>
         <Field label={t('notes')}><input value={v.notes} onChange={e => setV({ ...v, notes: e.target.value })} /></Field>
@@ -164,7 +165,9 @@ function AddBatch({ init, products, onClose, onDone }) {
 function Finish({ batch, product, onClose, onDone }) {
   const t = useT()
   const toast = useToast()
-  const [qty, setQty] = useState(batch.batches * (product.batch_yield || 0))
+  const theo = batch.batches * theoYield(product)
+  const [qty, setQty] = useState(Math.round(batch.batches * expYield(product) * 1000) / 1000)
+  const loss = theo ? (1 - (Number(qty) || 0) / theo) * 100 : null
   const [lot, setLot] = useState('')
   const [printAfter, setPrintAfter] = useState(true)
   async function save(e) {
@@ -178,9 +181,11 @@ function Finish({ batch, product, onClose, onDone }) {
     <Modal title={`${t('finish')} · B${batch.no} ${t.pick(product)}`} onClose={onClose}>
       <form onSubmit={save} className="stack">
         <Field label={`${t('actualQty')} (${product.unit})`}
-          hint={`${t('expectedQty')}: ${fmtNum(batch.batches * (product.batch_yield || 0), t.lang)}`}>
+          hint={`${t('theoQty')}: ${fmtNum(theo, t.lang)} · ${t('expectedQty')}: ${fmtNum(batch.batches * expYield(product), t.lang)}`}>
           <NumInput value={qty} onChange={setQty} required min={0} />
         </Field>
+        {loss != null && <p className={`small ${loss > Number(product.loss_pct || 0) + 2 ? 'error-box' : 'muted'}`}>
+          {t('lossNow', { a: fmtNum(theo - (Number(qty) || 0), t.lang), u: product.unit, p: fmtNum(loss, t.lang, 1), e: fmtNum(product.loss_pct || 0, t.lang, 1) })}</p>}
         <Field label={t('lot')} hint="YYMMDD-#"><input value={lot} onChange={e => setLot(e.target.value)} /></Field>
         <label className="check-inline"><input type="checkbox" checked={printAfter} onChange={e => setPrintAfter(e.target.checked)} />{t('printAfterFinish')}</label>
         <div className="modal-foot"><span className="grow" />
@@ -189,4 +194,13 @@ function Finish({ batch, product, onClose, onDone }) {
       </form>
     </Modal>
   )
+}
+
+// loss of a finished batch vs the theoretical output; red when clearly above the usual loss
+function LossTag({ batch, product }) {
+  const t = useT()
+  const l = lossPct(batch, product)
+  if (l == null) return '–'
+  const high = l > Number(product.loss_pct || 0) + 2
+  return <span className={high ? 'tag tag-low' : 'muted'} title={t('lossVsTheo')}>{fmtNum(l, t.lang, 1)}%</span>
 }

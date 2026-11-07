@@ -4,17 +4,21 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { LangSwitch } from '../App'
 import { Field, errText } from '../components/ui'
+import { LegalLinks } from '../legal/LegalPage'
 
 export default function RequestAccess({ profile }) {
   const t = useT()
   const { reloadProfile, signOut, session } = useAuth()
   const [v, setV] = useState({ name: '', company: '', phone: '' })
+  const [agree, setAgree] = useState(false)
   const [err, setErr] = useState(null)
 
   async function submit(e) {
     e.preventDefault()
     const { error } = await db.rpc('request_access', { p_name: v.name, p_company: v.company, p_phone: v.phone, p_lang: t.lang })
-    if (error) setErr(errText(error)); else reloadProfile()
+    if (error) return setErr(errText(error))
+    await db.rpc('accept_terms')   // records which terms version they accepted
+    reloadProfile()
   }
 
   return (
@@ -36,13 +40,17 @@ export default function RequestAccess({ profile }) {
             <Field label={t('yourName')}><input required value={v.name} onChange={e => setV({ ...v, name: e.target.value })} /></Field>
             <Field label={t('company')}><input required value={v.company} onChange={e => setV({ ...v, company: e.target.value })} /></Field>
             <Field label={t('phone')}><input type="tel" value={v.phone} onChange={e => setV({ ...v, phone: e.target.value })} /></Field>
+            <p className="muted small">{t('b2bOnly')}</p>
+            <label className="check-line"><input type="checkbox" required checked={agree} onChange={e => setAgree(e.target.checked)} />
+              <span>{t('acceptTermsPre')} <a href="/legal/aszf" target="_blank" rel="noopener">{t('legalTerms')}</a> {t('acceptTermsMid')} <a href="/legal/adatvedelem" target="_blank" rel="noopener">{t('legalPrivacy')}</a> {t('acceptTermsPost')}</span></label>
             {err && <p className="error-box">{err}</p>}
             <div className="row-gap">
-              <button className="btn btn-primary">{t('send')}</button>
+              <button className="btn btn-primary" disabled={!agree}>{t('send')}</button>
               <button type="button" className="btn" onClick={signOut}>{t('signOut')}</button>
             </div>
           </form>
         )}
+        <LegalLinks />
       </div>
     </div>
   )

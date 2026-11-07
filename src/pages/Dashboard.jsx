@@ -23,7 +23,7 @@ export default function Dashboard() {
       q(db.from('production_batches').select('id,product_id,batches,status').eq('status', 'planned')),
       q(db.from('purchase_orders').select('id').eq('status', 'ordered')),
       isAdmin ? q(db.rpc('list_users')).then(u => u.filter(x => x.role === 'pending')) : Promise.resolve([]),
-      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,sort').eq('active', true).order('sort')),
+      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort').eq('active', true).order('sort')),
       q(db.from('recipe_lines').select('product_id,material_id,qty_per_batch')),
       q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand')),
       q(db.from('product_stock').select('id,on_hand')),

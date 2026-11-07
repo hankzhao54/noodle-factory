@@ -24,6 +24,7 @@ import EmailSettings from './pages/EmailSettings'
 import RuleSettings from './pages/RuleSettings'
 import Reports from './pages/Reports'
 import PriceTiers from './pages/PriceTiers'
+import LegalPage from './legal/LegalPage'
 
 export default function App() {
   const [lang, setLangState] = useState(() => localStorage.getItem('nf-lang') || 'hu')
@@ -39,7 +40,11 @@ export default function App() {
   return (
     <LangContext.Provider value={{ lang, setLang }}>
       <ToastProvider>
-        <AuthProvider><Gate /></AuthProvider>
+        <Routes>
+          {/* legal pages are public: no sign-in needed */}
+          <Route path="/legal/:doc" element={<LegalPage />} />
+          <Route path="*" element={<AuthProvider><Gate /></AuthProvider>} />
+        </Routes>
       </ToastProvider>
     </LangContext.Provider>
   )

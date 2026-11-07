@@ -2,14 +2,24 @@
 // demand = open orders (submitted/confirmed) due on or before the date
 // toMake = demand − finished stock − already planned batches; suggest = batches to add
 
+// output per batch: theoretical = recipe yield; expected = after the product's usual loss %
+export const theoYield = p => Number(p?.batch_yield || 0)
+export const expYield = p => theoYield(p) * (1 - Number(p?.loss_pct || 0) / 100)
+// loss % of a finished batch vs the theoretical output (null if unknown)
+export function lossPct(batch, p) {
+  const theo = Number(batch.batches) * theoYield(p)
+  if (!theo || batch.actual_qty == null) return null
+  return (1 - Number(batch.actual_qty) / theo) * 100
+}
+
 export function buildPlan({ products, demand, pstock, batches }) {
   const open = batches.filter(b => b.status === 'planned')
   return products.map(p => {
     const d = demand.filter(x => x.product_id === p.id).reduce((s, x) => s + Number(x.qty), 0)
     const onHand = Number(pstock.find(s => s.id === p.id)?.on_hand || 0)
-    const planned = open.filter(b => b.product_id === p.id).reduce((s, b) => s + Number(b.batches) * Number(p.batch_yield || 0), 0)
+    const planned = open.filter(b => b.product_id === p.id).reduce((s, b) => s + Number(b.batches) * expYield(p), 0)
     const toMake = Math.max(0, d - Math.max(onHand, 0) - planned)
-    const suggest = toMake > 0 ? Math.ceil(toMake / (Number(p.batch_yield) || 1)) : 0
+    const suggest = toMake > 0 ? Math.ceil(toMake / (expYield(p) || 1)) : 0
     return { p, demand: d, onHand, planned, toMake, suggest }
   }).filter(r => r.demand > 0 || r.planned > 0)
 }

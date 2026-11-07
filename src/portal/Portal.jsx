@@ -8,20 +8,26 @@ import { Loading, ErrorBox, Empty, Status, Tabs, useToast, errText } from '../co
 import QtyPicker, { cartTotal } from '../components/QtyPicker'
 import { dateProblem, nextDates, deliveryDays, dayName } from '../lib/orderRules'
 import InstallHint from '../components/InstallHint'
+import { LegalLinks } from '../legal/LegalPage'
+import { usePublicInfo } from '../lib/publicInfo'
 
 export default function Portal() {
   const t = useT()
-  const { signOut, profile, isRestaurant } = useAuth()
+  const { signOut, profile, isRestaurant, reloadProfile } = useAuth()
+  const info = usePublicInfo()
+  // external customers must accept the current terms before ordering (place_order checks it too)
+  const needTerms = profile?.role === 'customer' && info && profile.terms_version !== info.terms_version
   const [tab, setTab] = useState('order')
   const [qty, setQty] = useState({})
   const { data, error, reload } = useData(async () => {
-    const [me, catalog, orders, rules] = await Promise.all([
+    const [me, catalog, orders, rules, pinfo] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
       q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
+      q(db.rpc('product_info')).catch(() => null),
     ])
-    return { me, catalog, orders, rules }
+    return { me, catalog, orders, rules, pinfo }
   })
 
   return (
@@ -31,12 +37,13 @@ export default function Portal() {
         <div className="portal-tools"><LangSwitch /><button className="btn-link" onClick={signOut}>{t('signOut')}</button></div>
       </header>
       <InstallHint />
+      {needTerms && <TermsBanner first={!profile.terms_version} onDone={reloadProfile} />}
       <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')]]} />
       <ErrorBox error={error} />
       {!data ? <Loading /> : !profile?.customer_id || !data.me ? (
         <p className="note-box">{t('noCustomerLink')}</p>
       ) : tab === 'order' ? (
-        <OrderSheet internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
+        <OrderSheet blocked={needTerms} info={info} pinfo={data.pinfo} internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
           onPlaced={() => { setQty({}); reload(); setTab('history') }} />
       ) : (
         <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} reload={reload}
@@ -46,11 +53,29 @@ export default function Portal() {
             setQty(next); setTab('order')
           }} />
       )}
+      <LegalLinks className="portal-legal" />
     </div>
   )
 }
 
-function OrderSheet({ internal, catalog, me, rules, qty, setQty, onPlaced }) {
+function TermsBanner({ first, onDone }) {
+  const t = useT()
+  const toast = useToast()
+  const [agree, setAgree] = useState(false)
+  async function accept() {
+    try { await q(db.rpc('accept_terms')); onDone() } catch (e) { toast(errText(e), 'error') }
+  }
+  return (
+    <div className="note-box terms-banner" role="region" aria-label={t('legalTerms')}>
+      <p><b>{t(first ? 'termsFirst' : 'termsChanged')}</b></p>
+      <label className="check-line"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
+        <span>{t('acceptTermsPre')} <a href="/legal/aszf" target="_blank" rel="noopener">{t('legalTerms')}</a> {t('acceptTermsMid')} <a href="/legal/adatvedelem" target="_blank" rel="noopener">{t('legalPrivacy')}</a> {t('acceptTermsPost')}</span></label>
+      <button type="button" className="btn btn-primary btn-sm" disabled={!agree} onClick={accept}>{t('acceptTerms')}</button>
+    </div>
+  )
+}
+
+function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, setQty, onPlaced }) {
   const t = useT()
   const toast = useToast()
   const options = nextDates(rules, 6)
@@ -94,15 +119,16 @@ function OrderSheet({ internal, catalog, me, rules, qty, setQty, onPlaced }) {
         {rules && <p className="muted small">{t('rulesNote', { cutoff: rules.cutoff || '–', days })}</p>}
         {me.address && <p className="muted small">{me.address}</p>}
       </div>
-      {catalog.length === 0 ? <Empty /> : <QtyPicker items={catalog} qty={qty} setQty={setQty} />}
+      {catalog.length === 0 ? <Empty /> : <QtyPicker items={catalog} qty={qty} setQty={setQty} info={pinfo}
+        producer={info ? [info.company_name, info.company_address].filter(Boolean).join(', ') : null} />}
       <label className="field"><span className="field-label">{t('notes')}</span>
         <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></label>
       <div className="cart-bar">
         <div>
-          <b>{internal ? t('itemsN', { n: count }) : fmtFt(total, t.lang)}</b>
+          <b>{internal ? t('itemsN', { n: count }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</b>
           <span className="muted small">{internal ? (count ? t('internalOrderNote') : t('emptyCart')) : <>{count ? t('itemsN', { n: count }) : t('emptyCart')} · {t('noPayment')}</>}</span>
         </div>
-        <button className="btn btn-primary" disabled={!count || busy || !!problem} onClick={place}>{t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked} onClick={place}>{t('placeOrder')}</button>
       </div>
     </div>
   )
@@ -130,7 +156,7 @@ function History({ internal, orders, catalog, reload, onAgain }) {
               <span className="mono-num">#{o.no}</span>
               <span>{fmtDate(o.delivery_date, t.lang)}</span>
               <Status value={o.status} prefix="o" />
-              <span className="num">{internal ? t('itemsN', { n: o.order_lines.length }) : fmtFt(total, t.lang)}</span>
+              <span className="num">{internal ? t('itemsN', { n: o.order_lines.length }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</span>
             </button>
             {open && (
               <div className="history-body">
