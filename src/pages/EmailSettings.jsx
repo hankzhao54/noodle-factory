@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, Empty, useToast, errText } from '../components/ui'
 
-const KEYS = ['email_mode', 'email_test_to', 'email_factory_to', 'email_factory_lang', 'email_from', 'email_reply_to', 'email_block']
+const KEYS = ['email_mode', 'email_test_to', 'email_factory_to', 'email_factory_lang', 'email_from', 'email_reply_to', 'email_block', 'slack_mode', 'slack_lang']
 
 // Order emails: on/off/test mode, alert address, sender, and the log of what was sent.
 export default function EmailSettings() {
@@ -69,6 +69,23 @@ export default function EmailSettings() {
             <input type="text" value={v.email_block || ''} disabled={off} onChange={e => set('email_block', e.target.value)} />
             <span className="field-hint">{t('emBlockHint')}</span></label>
           <p className="muted small span-2">{t('emCustomerHint')}</p>
+        </div>
+        <div className="panel-head"><h2>Slack</h2></div>
+        <div className="form-grid pad">
+          <label className="field"><span className="field-label">{t('slMode')}</span>
+            <select value={v.slack_mode || 'off'} disabled={off} onChange={e => set('slack_mode', e.target.value)}>
+              <option value="off">{t('emModeOff')}</option><option value="on">{t('slOn')}</option>
+            </select>
+            <span className="field-hint">{t('slModeHint')}</span></label>
+          <label className="field"><span className="field-label">{t('slLang')}</span>
+            <select value={v.slack_lang || 'zh'} disabled={off} onChange={e => set('slack_lang', e.target.value)}>
+              <option value="hu">Magyar</option><option value="en">English</option><option value="zh">中文</option>
+            </select></label>
+          <details className="span-2 small"><summary>{t('slSetup')}</summary>
+            <ol className="muted">{['slStep1', 'slStep2', 'slStep3', 'slStep4'].map(k => <li key={k}>{t(k)}</li>)}</ol></details>
+          {!off && <div className="span-2"><button type="button" className="btn btn-quiet" disabled={dirty}
+            onClick={async () => { try { await q(db.rpc('slack_test')); toast(t('slTestSent')); setTimeout(reload, 2500) } catch (err) { toast(errText(err), 'error') } }}>{t('slTest')}</button>
+            {dirty && <span className="muted small"> {t('slSaveFirst')}</span>}</div>}
         </div>
         {!off && <div className="modal-foot pad"><span className="grow" />
           <button className="btn btn-primary" disabled={!dirty}>{t('save')}</button></div>}

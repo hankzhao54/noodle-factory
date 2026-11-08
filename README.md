@@ -18,6 +18,7 @@
 | 进货 | 进货单（草稿 → 已下单 → 收货入库），低于最低库存的原料一键生成进货单；收货时填批号和保质期，并更新原料成本；收货后可直接打印进货标签（原料名、批号、入库日、到期日、供应商、每张数量、记录人、「开封：____」空行），每种原料可设印几张，已入库的进货单也能补打 |
 | 标签打印 | 默认「简洁」样式，同 OkoHACCP 的内容：品名、Azon（批号，多张时加 -01/-02）、Rögzítő（记录人）、Gyártás időp.、Fogyasztható（到分钟）、Mennyiség（每张数量），可选加印 Tárolás（储存条件）和生产商名称地址（默认印）；二维码可选（默认不印）。默认 62 mm 连续纸 (DK-22205)、长 32 mm，文字自动放大到刚好占满。**手机**：点打印 → 分享菜单里选「打印」→ Brother QL-810W，用 iPhone 自带打印打 300 dpi 图片（iPhone 两端各留约 4.5 mm 白边，已按此加长标签）。**电脑**：打开精确尺寸的 PDF 打印（待电脑装好驱动后再调）。另有「完整」样式：配料表（过敏原加粗，包装不印）、生产商、储存条件等 |
 | 原料配料名 | 原料可填配料表名称（匈/英/中，如「búzaliszt (BL80)」「savanyúságot szabályozó anyag (E500)」），产品信息、送货单配料都用它 |
+| Slack 推送 | 「通知」页可打开 Slack 推送：每张新订单（客户、送货日、产品数量、净价合计、备注、后台链接）和每次取消订单发到一个 Slack 频道，语言可选；用 Slack Incoming Webhook，URL 放在 Supabase Edge Function Secrets 的 `SLACK_WEBHOOK_URL`；有「发测试消息」按钮，发送记录和邮件记录在一起 |
 | 标签设置 | 「Címke beállítások」页：每个产品的保质期（天）和每张标签默认数量（kg），以及没填时用的默认值；打印时自动带出，数量默认按 kg |
 | 订单邮件 | 用 Resend 从 rendeles@101bistro.hu 发信：外部客户下单 →「已收到」，工厂确认 →「已确认」（员工代下单直接发「已确认」）；每个新订单给工厂发提醒；自家餐厅不收客户邮件。「E-mail beállítások」页可切换 关闭/测试/正式、改通知地址，并查看发送记录。数据库触发器 → Edge Function `noodle-order-email`（`supabase/functions/`）→ Resend；需要在 Supabase Edge Function Secrets 里设 `RESEND_API_KEY` |
 | 下单规则 | 截单时间（布达佩斯时间）、提前天数、工厂送货日；匈牙利法定假日自动不送货（含复活节/圣灵降临节等移动假日和 12 月 24–26 日，每年自动算，`hu_holidays()`），调休日（áthelyezett pihenőnap）可选，日期每年按政府公告填；另外可手动加休息日，设置页列出接下来不送货的日子；每个客户可再限定送货日。客户下单页只显示能选的送货日，服务器也会检查；员工代下单不受限制 |
@@ -48,7 +49,7 @@
 
 1. **建表**：Supabase → SQL Editor，运行 `supabase/001_noodle_schema.sql`
 2. **开放 schema**：Settings → API → Exposed schemas，加上 `noodle`（和之前的 `ordering` 一样）
-3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`、`014_admin_users.sql`、`015_price_tiers.sql`、`016_compliance.sql`、`017_hu_holidays.sql`
+3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`、`014_admin_users.sql`、`015_price_tiers.sql`、`016_compliance.sql`、`017_hu_holidays.sql`、`018_slack.sql`
 4. （可选）运行 `supabase/002_demo_data.sql` 装演示数据，文件底部有一键删除的 SQL
 5. **本地运行**：
    ```
