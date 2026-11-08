@@ -488,3 +488,6 @@ textarea { resize: vertical; }
 .prod-info dt { color: var(--ink-3); }
 .prod-info dd { margin: 0; }
 .dnote-ingr { font-size: 8.5pt; margin: 2px 0 0; color: #333; font-weight: 400; }
+.closed-list summary { cursor: pointer; color: var(--ink-2); width: fit-content; }
+.closed-list ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); columns: 2; column-gap: 32px; }
+@media (max-width: 640px) { .closed-list ul { columns: 1; } }

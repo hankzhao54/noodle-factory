@@ -9,7 +9,7 @@ import { refreshPublicInfo } from '../lib/publicInfo'
 import { LEGAL } from '../legal/LegalPage'
 
 const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_email', 'company_phone', 'company_authority', 'terms_version']
-const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'lot_expiry_warn_days', ...COMPANY]
+const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'lot_expiry_warn_days', ...COMPANY]
 
 // Ordering rules (cutoff, lead time, delivery weekdays, closed dates) and the lot expiry warning
 export default function RuleSettings() {
@@ -35,7 +35,7 @@ export default function RuleSettings() {
   const off = !isAdmin
   async function save(e) {
     e.preventDefault()
-    const clean = { ...v, order_closed_dates: parseDates(v.order_closed_dates).join(', ') }
+    const clean = { ...v, order_closed_dates: parseDates(v.order_closed_dates).join(', '), order_bridge_days: parseDates(v.order_bridge_days).join(', ') }
     try {
       const now = new Date().toISOString()
       await q(db.from('settings').upsert(KEYS.map(k => ({ key: k, value: String(clean[k] ?? ''), updated_at: now }))))
@@ -63,9 +63,22 @@ export default function RuleSettings() {
                 <input type="checkbox" checked={days.includes(d)} disabled={off} onChange={() => toggleDay(d)} />{dayName(t.lang, d)}
               </label>))}</div>
             <span className="field-hint">{t('rsWeekdaysHint')}</span></div>
+          <div className="field span-2"><span className="field-label">{t('rsHolidays')}</span>
+            <label className="check-inline"><input type="checkbox" disabled={off} checked={(v.order_close_hu_holidays ?? 'true') === 'true'}
+              onChange={e => set('order_close_hu_holidays', String(e.target.checked))} />{t('rsHuHolidays')}</label>
+            <span className="field-hint">{t('rsHuHolidaysHint')}</span>
+            <label className="check-inline"><input type="checkbox" disabled={off} checked={v.order_close_bridge_days === 'true'}
+              onChange={e => set('order_close_bridge_days', String(e.target.checked))} />{t('rsBridge')}</label>
+            {v.order_close_bridge_days === 'true' && <>
+              <input type="text" placeholder="2026-01-02, 2026-08-21" value={v.order_bridge_days || ''} disabled={off} aria-label={t('rsBridge')}
+                onChange={e => set('order_bridge_days', e.target.value)} />
+              <span className="field-hint">{t('rsBridgeHint')}</span></>}
+          </div>
           <label className="field span-2"><span className="field-label">{t('rsClosed')}</span>
             <input type="text" placeholder="2026-12-24, 2026-12-25" value={v.order_closed_dates || ''} disabled={off} onChange={e => set('order_closed_dates', e.target.value)} />
             <span className="field-hint">{t('rsClosedHint')}</span></label>
+          {data.rules?.closed_list?.length > 0 && <details className="span-2 closed-list"><summary className="small">{t('rsClosedUpcoming', { n: data.rules.closed_list.length })}</summary>
+            <ul className="small">{data.rules.closed_list.map(x => <li key={x.date}>{fmtDate(x.date, t.lang)} · {x.name || t('rsManual')}</li>)}</ul></details>}
           <p className="muted small span-2">{t('rsPreview')}: {preview.map(d => fmtDate(d, t.lang)).join(' · ') || '–'}</p>
         </div>
         <div className="panel-head"><h2>{t('rsLots')}</h2></div>
