@@ -6,7 +6,7 @@
 -- =====================================================================
 insert into noodle.settings (key, value) values
   ('slack_mode', 'off'),
-  ('slack_lang', 'zh')
+  ('slack_lang', 'en')
 on conflict (key) do nothing;
 
 create or replace function noodle.queue_order_email() returns trigger

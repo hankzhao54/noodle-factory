@@ -78,7 +78,7 @@ export default function EmailSettings() {
             </select>
             <span className="field-hint">{t('slModeHint')}</span></label>
           <label className="field"><span className="field-label">{t('slLang')}</span>
-            <select value={v.slack_lang || 'zh'} disabled={off} onChange={e => set('slack_lang', e.target.value)}>
+            <select value={v.slack_lang || 'en'} disabled={off} onChange={e => set('slack_lang', e.target.value)}>
               <option value="hu">Magyar</option><option value="en">English</option><option value="zh">中文</option>
             </select></label>
           <details className="span-2 small"><summary>{t('slSetup')}</summary>
