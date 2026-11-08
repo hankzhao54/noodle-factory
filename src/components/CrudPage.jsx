@@ -84,8 +84,11 @@ export default function CrudPage({ table, title, columns, fields, defaults = {},
         <EditForm table={table} imageFolder={imageFolder} fields={fields} row={editing} title={title}
           extra={extraFormContent}
           onClose={() => setEditing(null)}
-          onSaved={async saved => { setEditing(null); toast(t('saved')); await reload(); afterSave?.(saved) }}
-          onDeleted={async () => { setEditing(null); await reload() }}
+          onSaved={async saved => {
+            // a new row with extra sections (e.g. customer prices): stay open so they can be filled right away
+            setEditing(!editing.id && extraFormContent ? saved : null)
+            toast(t('saved')); await reload(); afterSave?.(saved) }}
+          onDeleted={async msg => { setEditing(null); toast(msg || t('deleted')); await reload() }}
           onError={e => toast(errText(e), 'error')} />
       )}
     </div>
@@ -132,9 +135,19 @@ function EditForm({ table, fields, row, title, onClose, onSaved, onDeleted, onEr
     } catch (err) { onError(err) } finally { setBusy(false) }
   }
 
+  // two-step delete inside the dialog (browser confirm() popups are blocked in some apps).
+  // If the row is still referenced (e.g. a customer with orders), offer to deactivate instead.
+  const [del, setDel] = useState(null)   // null | 'ask' | 'used'
+  const canDeactivate = fields.some(f => f.key === 'active')
   async function remove() {
-    if (!confirm(t('confirmDelete'))) return
     try { await q(db.from(table).delete().eq('id', row.id)); onDeleted() }
+    catch (err) {
+      if (/foreign key/i.test(err.message || '')) setDel('used')
+      else { setDel(null); onError(err) }
+    }
+  }
+  async function deactivate() {
+    try { await q(db.from(table).update({ active: false }).eq('id', row.id)); onDeleted(t('deactivated')) }
     catch (err) { onError(err) }
   }
 
@@ -177,8 +190,16 @@ function EditForm({ table, fields, row, title, onClose, onSaved, onDeleted, onEr
         ))}
       </form>
       {extra && row.id && extra(row)}
+      {extra && !row.id && <p className="muted small">{t('moreAfterSave')}</p>}
+      {del === 'ask' && <p className="note-box">{t('confirmDelete')}</p>}
+      {del === 'used' && <p className="note-box">{canDeactivate ? t('inUseDeactivate') : t('inUseNoDelete')}</p>}
       <div className="modal-foot">
-        {row.id && <button type="button" className="btn btn-danger-quiet" onClick={remove}>{t('delete')}</button>}
+        {row.id && (del === 'used'
+          ? (canDeactivate && row.active !== false && <button type="button" className="btn btn-danger" onClick={deactivate}>{t('deactivate')}</button>)
+          : del === 'ask'
+            ? <><button type="button" className="btn btn-danger" onClick={remove}>{t('confirmDeleteBtn')}</button>
+                <button type="button" className="btn btn-quiet" onClick={() => setDel(null)}>{t('cancel')}</button></>
+            : <button type="button" className="btn btn-danger-quiet" onClick={() => setDel('ask')}>{t('delete')}</button>)}
         <span className="grow" />
         <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
         <button type="submit" form="crud-form" className="btn btn-primary" disabled={busy}>{t('save')}</button>
