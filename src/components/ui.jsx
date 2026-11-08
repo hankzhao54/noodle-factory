@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useT, fmtNum, translate } from '../lib/i18n'
+import { logError } from '../lib/errorLog'
 
 /* ---------- toast ---------- */
 const ToastCtx = createContext(() => {})
@@ -23,6 +24,7 @@ export function ToastProvider({ children }) {
 export function errText(e) {
   if (!e) return ''
   const m = e.message || String(e)
+  logError(m, e.code ? { code: e.code, details: e.details || undefined, hint: e.hint || undefined } : undefined)
   if (/row-level security/i.test(m)) return 'No permission for this action.'
   if (/terms not accepted/i.test(m)) return translate(localStorage.getItem('nf-lang') || 'hu', 'termsNeeded')
   if (/duplicate key/i.test(m)) return 'That code already exists.'
