@@ -4,7 +4,7 @@ import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtNum } from '../lib/i18n'
 import { Modal, Field, Loading, NumInput, useToast, errText } from './ui'
-import { LABEL_SIZES, drawSimpleLabel, labelFontsReady } from './LabelPrint'
+import { LABEL_SIZES, drawSimpleLabel, labelFontsReady, fmtLabelQty } from './LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 
 // label wording in the label's own language
@@ -66,7 +66,7 @@ export default function ReceiveLabels({ poId, onClose }) {
       { text: `${T.received}: ${ymd(data.po.received_at || data.po.order_date)}` },
       line.expiry_date && { text: `${T.expiry}: ${ymd(line.expiry_date)}` },
       opt.supplier && data.supplier?.name && { text: `${T.supplier}: ${data.supplier.name}` },
-      per > 0 && { text: `${T.qty}: ${fmtNum(per, 'hu', 3)} ${T.units[m.unit] || m.unit || ''}` },
+      per > 0 && { text: `${T.qty}: ${fmtLabelQty(per, m.unit, T.units)}` },
       recorder && { text: `${T.recorder}: ${recorder}` },
       opt.opened && { text: `${T.opened}: ______________` },
     ].filter(Boolean)

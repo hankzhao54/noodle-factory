@@ -34,6 +34,17 @@ const ALLERGEN = {
   lupin: ['csillagfürt', 'lupin', '羽扇豆'], sulphites: ['kén-dioxid, szulfitok', 'sulphites', '亚硫酸盐'],
 }
 const LI = { hu: 0, en: 1, zh: 2 }
+// quantity on labels: kg with at most one decimal, rounded down so the label never overstates
+// (51,605 kg → 51,6 kg); under 1 kg it is shown in grams (0,25 kg → 250 g). Returns number + unit.
+export function fmtLabelQty(n, unit, units = {}) {
+  const v = Number(n) || 0
+  const u = x => units[x] || x
+  if ((unit === 'kg' || unit === 'l') && v > 0 && v < 1) return `${fmtNum(Math.floor(v * 1000 + 1e-6), 'hu', 0)} ${u(unit === 'kg' ? 'g' : 'ml')}`
+  if (unit === 'kg' || unit === 'l') return `${fmtNum(Math.floor(v * 10 + 1e-6) / 10, 'hu', 1)} ${u(unit)}`
+  if (['g', 'ml', 'pcs', 'db'].includes(unit)) return `${fmtNum(Math.floor(v + 1e-6), 'hu', 0)} ${u(unit)}`
+  return `${fmtNum(v, 'hu', 2)} ${u(unit || '')}`.trim()
+}
+
 export function allergenName(raw, lang) {
   const k = String(raw).trim().toLowerCase()
   for (const [key, names] of Object.entries(ALLERGEN)) {
@@ -119,7 +130,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
     const num = v => (v !== null && v !== undefined && v !== '' && !isNaN(Number(v)) ? Number(v) : null)
     const kg = num(p.label_qty_kg) ?? num(cfg.label_default_qty_kg)
       ?? (p.pack_size_g ? Number(p.pack_size_g) / 1000 : null) ?? (Number(data.batch.actual_qty) || 1)
-    setAmount(kg); setUnit('kg')
+    setAmount(kg >= 1 ? Math.floor(kg * 10 + 1e-6) / 10 : kg); setUnit('kg')
   }, [data, amount])
   const lot = data?.batch.lot_no || ''
   useEffect(() => {
@@ -384,7 +395,7 @@ function simpleLines({ product, batch, expiry, settings, lang, recorder, amount,
     recorder && { text: `${T.recorder}: ${recorder}` },
     { text: `${T.producedAt}: ${ymdhm(produced)}` },
     useBy && { text: `${T.useBy}: ${ymdhm(useBy)}` },
-    amount > 0 && { text: `${T.qty}: ${fmtNum(amount, 'hu', 3)} ${T.units[unit] || unit}` },
+    amount > 0 && { text: `${T.qty}: ${fmtLabelQty(amount, unit, T.units)}` },
     showStorage && product.storage && { text: `${T.storage}: ${product.storage}` },
     showProducer && settings?.label_producer && { text: `${T.producer}: ${settings.label_producer}` },
     showProducer && settings?.label_address && { text: settings.label_address },
@@ -476,7 +487,7 @@ function SimpleLabel({ product, batch, expiry, settings, qr, lang, w, h, recorde
         {recorder && <span>{T.recorder}: {recorder}</span>}
         <span>{T.producedAt}: {ymdhm(produced)}</span>
         {useBy && <span>{T.useBy}: {ymdhm(useBy)}</span>}
-        {amount > 0 && <span>{T.qty}: {fmtNum(amount, 'hu', 3)} {T.units[unit] || unit}</span>}
+        {amount > 0 && <span>{T.qty}: {fmtLabelQty(amount, unit, T.units)}</span>}
       </div>
     </div>
   )
