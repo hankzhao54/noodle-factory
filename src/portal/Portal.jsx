@@ -23,7 +23,7 @@ export default function Portal() {
     const [me, catalog, orders, rules, pinfo] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
-      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
     ])
@@ -33,7 +33,7 @@ export default function Portal() {
   return (
     <div className="portal">
       <header className="portal-head">
-        <div className="portal-brand"><img src="/icon.svg" alt="" width="28" height="28" /><span>{data?.me?.name || t('appName')}</span></div>
+        <div className="portal-brand"><img src="/icon.svg" alt="" width="28" height="28" /><span>{data?.me?.name || t('appName')}{data?.rules?.my_location && data.rules.locations?.[0] ? ` · ${data.rules.locations[0].name}` : ''}</span></div>
         <div className="portal-tools"><LangSwitch /><button className="btn-link" onClick={signOut}>{t('signOut')}</button></div>
       </header>
       <InstallHint />
@@ -75,11 +75,29 @@ function TermsBanner({ first, onDone }) {
   )
 }
 
-function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, setQty, onPlaced }) {
+const STORE_KEY = 'nf-store'
+function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRules, qty, setQty, onPlaced }) {
   const t = useT()
   const toast = useToast()
+  // companies with several stores: pick the store first (store accounts are fixed to theirs)
+  const stores = baseRules?.locations || []
+  const [storeId, setStoreId] = useState(() => {
+    if (stores.length === 1) return stores[0].id
+    let last = null; try { last = localStorage.getItem(STORE_KEY) } catch { /* ignore */ }
+    return stores.some(l => l.id === last) ? last : ''
+  })
+  const store = stores.find(l => l.id === storeId)
+  // the store's delivery weekdays (if set) replace the company's
+  const rules = baseRules && store?.weekdays?.length ? { ...baseRules, my_weekdays: store.weekdays } : baseRules
   const options = nextDates(rules, 6)
   const [date, setDate] = useState(() => options[0] || todayISO(1))
+  function pickStore(id) {
+    setStoreId(id); try { localStorage.setItem(STORE_KEY, id) } catch { /* ignore */ }
+    const l = stores.find(x => x.id === id)
+    const r = baseRules && l?.weekdays?.length ? { ...baseRules, my_weekdays: l.weekdays } : baseRules
+    if (dateProblem(r, date)) setDate(nextDates(r, 1)[0] || date)
+  }
+  const needStore = stores.length > 0 && !store
   const problem = dateProblem(rules, date)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
@@ -90,7 +108,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, s
     setBusy(true)
     try {
       await q(db.rpc('place_order', {
-        p_delivery_date: date, p_notes: notes || null,
+        p_delivery_date: date, p_notes: notes || null, p_location_id: storeId || null,
         p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q })),
       }))
       toast(t(internal ? 'orderPlacedInternal' : 'orderPlaced')); setNotes(''); onPlaced()
@@ -104,6 +122,16 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, s
   return (
     <div className="order-sheet">
       <div className="sheet-head">
+        {stores.length > 1 && <>
+          <span className="field-label">{t('deliverTo')}</span>
+          <div className="date-chips" role="radiogroup" aria-label={t('deliverTo')}>
+            {stores.map(l => (
+              <button key={l.id} type="button" role="radio" aria-checked={l.id === storeId}
+                className={l.id === storeId ? 'chip on' : 'chip'} onClick={() => pickStore(l.id)}>{l.name}</button>
+            ))}
+          </div>
+          {needStore && <p className="muted small">{t('pickStore')}</p>}
+        </>}
         <span className="field-label">{t('deliveryDate')}</span>
         {options.length > 0 && (
           <div className="date-chips" role="radiogroup" aria-label={t('deliveryDate')}>
@@ -117,7 +145,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, s
           <input type="date" min={rules?.earliest || todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
         {problem && <p className="error-box small">{t('dp_' + problem)}</p>}
         {rules && <p className="muted small">{t('rulesNote', { cutoff: rules.cutoff || '–', days })}</p>}
-        {me.address && <p className="muted small">{me.address}</p>}
+        {(store ? store.address : me.address) && <p className="muted small">{store ? `${store.name} · ${store.address}` : me.address}</p>}
       </div>
       {catalog.length === 0 ? <Empty /> : <QtyPicker items={catalog} qty={qty} setQty={setQty} info={pinfo}
         producer={info ? [info.company_name, info.company_address].filter(Boolean).join(', ') : null} />}
@@ -128,7 +156,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules, qty, s
           <b>{internal ? t('itemsN', { n: count }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</b>
           <span className="muted small">{internal ? (count ? t('internalOrderNote') : t('emptyCart')) : <>{count ? t('itemsN', { n: count }) : t('emptyCart')} · {t('noPayment')}</>}</span>
         </div>
-        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked} onClick={place}>{t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked || needStore} onClick={place}>{t('placeOrder')}</button>
       </div>
     </div>
   )
@@ -154,7 +182,7 @@ function History({ internal, orders, catalog, reload, onAgain }) {
           <li key={o.id} className={open ? 'open' : ''}>
             <button className="history-row" aria-expanded={open} onClick={() => setOpenId(open ? null : o.id)}>
               <span className="mono-num">#{o.no}</span>
-              <span>{fmtDate(o.delivery_date, t.lang)}</span>
+              <span>{fmtDate(o.delivery_date, t.lang)}{o.store ? <span className="muted"> · {o.store.name}</span> : ''}</span>
               <Status value={o.status} prefix="o" />
               <span className="num">{internal ? t('itemsN', { n: o.order_lines.length }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</span>
             </button>

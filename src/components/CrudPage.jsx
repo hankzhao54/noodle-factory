@@ -14,7 +14,7 @@ import { dayName } from '../lib/orderRules'
   imageFolder: when set ('materials' / 'products'), rows get a photo (image_path column)
 */
 export default function CrudPage({ table, title, columns, fields, defaults = {}, order = 'created_at',
-  searchKeys = [], children, onRowClick, extraFormContent, afterSave, rowActions, imageFolder }) {
+  searchKeys = [], children, onRowClick, extraFormContent, afterSave, rowActions, imageFolder, select = '*' }) {
   const t = useT()
   const toast = useToast()
   const [editing, setEditing] = useState(null)
@@ -22,7 +22,7 @@ export default function CrudPage({ table, title, columns, fields, defaults = {},
   const [showInactive, setShowInactive] = useState(false)
   const [bigImage, setBigImage] = useState(null)
   const { data, loading, error, reload } = useData(
-    () => q(db.from(table).select('*').order(order, { ascending: order !== 'created_at' })), [table])
+    () => q(db.from(table).select(select).order(order, { ascending: order !== 'created_at' })), [table])
 
   const rows = (data || [])
     .filter(r => showInactive || r.active !== false)

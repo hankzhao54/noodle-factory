@@ -12,12 +12,13 @@ export default function Orders() {
   const [detail, setDetail] = useState(null)
   const [creating, setCreating] = useState(false)
   const { data, loading, error, reload } = useData(async () => {
-    const [orders, customers, products] = await Promise.all([
-      q(db.from('orders').select('*, order_lines(*)').gte('delivery_date', from).order('delivery_date').order('created_at')),
+    const [orders, customers, products, stores] = await Promise.all([
+      q(db.from('orders').select('*, order_lines(*), store:customer_locations(name,address)').gte('delivery_date', from).order('delivery_date').order('created_at')),
       q(db.from('customers').select('id,name,type').order('name')),
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price,min_order_qty,pack_size_g,active,sort,image_path').order('sort')),
+      q(db.from('customer_locations').select('id,customer_id,name').eq('active', true).order('sort').order('name')),
     ])
-    return { orders, customers, products }
+    return { orders, customers, products, stores }
   }, [from])
 
   if (loading && !data) return <div className="page"><Loading /></div>
@@ -46,7 +47,8 @@ export default function Orders() {
             <tr key={o.id} className="clickable" onClick={() => setDetail(o)}>
               <td className="mono-num">#{o.no}</td>
               <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
-              <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</td>
+              <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
+                {o.store && <div className="muted small">{o.store.name}</div>}</td>
               <td className="muted small">{o.order_lines.map(l => {
                 const p = data.products.find(x => x.id === l.product_id) || {}
                 return `${t.pick(p)} ${fmtNum(l.qty, t.lang)}${p.unit || ''}`
@@ -59,7 +61,7 @@ export default function Orders() {
       )}
       {detail && <OrderDetail order={detail} customer={cust(detail.customer_id)} products={data.products}
         onClose={() => setDetail(null)} onDone={() => { setDetail(null); reload() }} />}
-      {creating && <NewOrder customers={data.customers} products={data.products}
+      {creating && <NewOrder customers={data.customers} products={data.products} stores={data.stores}
         onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload() }} />}
     </div>
   )
@@ -69,6 +71,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   const t = useT()
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
+  const [askCancel, setAskCancel] = useState(false)
   const total = order.order_lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
   const setStatus = async status => {
     try {
@@ -77,10 +80,11 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
     } catch (e) { toast(errText(e), 'error') }
   }
   return (
-    <Modal title={`#${order.no} · ${customer?.name || ''}`} onClose={onClose}>
+    <Modal title={`#${order.no} · ${customer?.name || ''}${order.store ? ` · ${order.store.name}` : ''}`} onClose={onClose}>
       <div className="detail-meta">
         <Status value={order.status} prefix="o" />
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
+        {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
       <table className="table compact">
         <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th><th className="num">{t('total')}</th></tr></thead>
@@ -96,7 +100,9 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
       {!readOnly && (
         <div className="modal-foot">
           {['submitted', 'confirmed', 'ready'].includes(order.status) &&
-            <button className="btn btn-danger-quiet" onClick={() => confirm(t('cancelOrder') + '?') && setStatus('cancelled')}>{t('cancelOrder')}</button>}
+            (askCancel
+              ? <button className="btn btn-danger" onClick={() => setStatus('cancelled')}>{t('cancelOrderConfirm')}</button>
+              : <button className="btn btn-danger-quiet" onClick={() => setAskCancel(true)}>{t('cancelOrder')}</button>)}
           <span className="grow" />
           {order.status === 'submitted' && <button className="btn btn-primary" onClick={() => setStatus('confirmed')}>{t('confirm')}</button>}
           {order.status === 'confirmed' && <button className="btn btn-primary" onClick={() => setStatus('ready')}>{t('markReady')}</button>}
@@ -106,10 +112,12 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   )
 }
 
-function NewOrder({ customers, products, onClose, onDone }) {
+function NewOrder({ customers, products, stores, onClose, onDone }) {
   const t = useT()
   const toast = useToast()
   const [customerId, setCustomerId] = useState('')
+  const [storeId, setStoreId] = useState('')
+  const myStores = stores.filter(l => l.customer_id === customerId)
   const [date, setDate] = useState(todayISO(1))
   const [notes, setNotes] = useState('')
   const [qty, setQty] = useState({})
@@ -121,7 +129,7 @@ function NewOrder({ customers, products, onClose, onDone }) {
   async function save() {
     try {
       await q(db.rpc('place_order', {
-        p_delivery_date: date, p_notes: notes || null, p_customer_id: customerId,
+        p_delivery_date: date, p_notes: notes || null, p_customer_id: customerId, p_location_id: storeId || null,
         p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q })),
       }))
       toast(t('saved')); onDone()
@@ -131,11 +139,16 @@ function NewOrder({ customers, products, onClose, onDone }) {
     <Modal wide title={t('newOrder')} onClose={onClose}>
       <div className="form-grid">
         <Field label={t('customer')}>
-          <select value={customerId} onChange={e => setCustomerId(e.target.value)} required>
+          <select value={customerId} onChange={e => { setCustomerId(e.target.value); setStoreId('') }} required>
             <option value="">–</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
+        {myStores.length > 0 && <Field label={t('store')}>
+          <select value={storeId} onChange={e => setStoreId(e.target.value)} required className={!storeId ? 'is-missing' : ''}>
+            <option value="">–</option>
+            {myStores.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select></Field>}
         <Field label={t('deliveryDate')}><input type="date" min={todayISO()} value={date} onChange={e => setDate(e.target.value)} /></Field>
         <Field label={t('notes')} span={2}><input value={notes} onChange={e => setNotes(e.target.value)} /></Field>
       </div>
@@ -144,7 +157,7 @@ function NewOrder({ customers, products, onClose, onDone }) {
         <b>{t('total')}: {fmtFt(cartTotal(items, qty), t.lang)}</b>
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('cancel')}</button>
-        <button className="btn btn-primary" disabled={!customerId || !Object.keys(qty).length} onClick={save}>{t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!customerId || (myStores.length > 0 && !storeId) || !Object.keys(qty).length} onClick={save}>{t('placeOrder')}</button>
       </div>
     </Modal>
   )

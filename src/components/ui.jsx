@@ -26,6 +26,8 @@ export function errText(e) {
   const m = e.message || String(e)
   logError(m, e.code ? { code: e.code, details: e.details || undefined, hint: e.hint || undefined } : undefined)
   if (/row-level security/i.test(m)) return 'No permission for this action.'
+  if (/store required/i.test(m)) return translate(localStorage.getItem('nf-lang') || 'hu', 'pickStore')
+  if (/store not available/i.test(m)) return translate(localStorage.getItem('nf-lang') || 'hu', 'storeNotAvailable')
   if (/terms not accepted/i.test(m)) return translate(localStorage.getItem('nf-lang') || 'hu', 'termsNeeded')
   if (/duplicate key/i.test(m)) return 'That code already exists.'
   if (/foreign key/i.test(m)) return 'It is still used elsewhere, so it cannot be deleted. Mark it inactive instead.'

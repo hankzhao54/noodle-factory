@@ -28,16 +28,20 @@ export default function Users() {
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
-    const [users, customers] = await Promise.all([
+    const [users, customers, locs, stores] = await Promise.all([
       q(db.rpc('list_users')),
       q(db.from('customers').select('id,name,type').eq('active', true).order('name')),
+      q(db.from('profiles').select('user_id,location_id')),
+      q(db.from('customer_locations').select('id,customer_id,name').eq('active', true).order('sort').order('name')),
     ])
-    return { users, customers }
+    const locOf = Object.fromEntries(locs.map(x => [x.user_id, x.location_id]))
+    return { users: users.map(u => ({ ...u, location_id: locOf[u.user_id] || null })), customers, stores }
   })
   async function update(u, patch) {
-    const next = { role: u.role, customer_id: u.customer_id, ...patch }
+    const next = { role: u.role, customer_id: u.customer_id, location_id: u.location_id, ...patch }
     const linked = data.customers.find(c => c.id === next.customer_id)
     if (!LINKED.includes(next.role) || (linked && linked.type !== TYPE_FOR[next.role])) next.customer_id = null
+    if (!data.stores.some(l => l.id === next.location_id && l.customer_id === next.customer_id)) next.location_id = null
     try { await q(db.from('profiles').update(next).eq('user_id', u.user_id)); toast(t('saved')); reload() }
     catch (e) { toast(errText(e), 'error') }
   }
@@ -70,6 +74,12 @@ export default function Users() {
                     {data.customers.filter(c => c.type === TYPE_FOR[u.role]).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 ) : <span className="muted">–</span>}
+                {LINKED.includes(u.role) && data.stores.some(l => l.customer_id === u.customer_id) && (
+                  <select className="store-select" value={u.location_id || ''} onChange={e => update(u, { location_id: e.target.value || null })}
+                    aria-label={t('storeAccess')}>
+                    <option value="">{t('allStores')}</option>
+                    {data.stores.filter(l => l.customer_id === u.customer_id).map(l => <option key={l.id} value={l.id}>{t('onlyStore', { s: l.name })}</option>)}
+                  </select>)}
               </td>
               <td className="muted nowrap">{fmtDate(u.created_at, t.lang)}</td>
               <td className="act">{u.user_id !== myId &&

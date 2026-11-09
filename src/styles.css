@@ -505,3 +505,6 @@ textarea { resize: vertical; }
 .ac-delete { background: #f6e3e1; color: #8a2e24; }
 .ac-error { background: #8a2e24; color: #fff; }
 .ac-detail pre { margin: 0; font-size: 0.78rem; white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; }
+.store-form { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 10px; background: var(--paper, #fff); }
+.store-select { margin-top: 4px; display: block; max-width: 100%; }
+.row-gap.wrap { flex-wrap: wrap; }

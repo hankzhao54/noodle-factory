@@ -20,7 +20,7 @@ export default function Deliveries() {
   const { data, loading, error, reload } = useData(async () => {
     const [runs, orders, customers, products, stock, pinfo] = await Promise.all([
       q(db.from('deliveries').select('*').eq('delivery_date', date).order('created_at')),
-      q(db.from('orders').select('*, order_lines(*)').eq('delivery_date', date).neq('status', 'cancelled').order('created_at')),
+      q(db.from('orders').select('*, order_lines(*), store:customer_locations(name,address,contact_person,phone,notes)').eq('delivery_date', date).neq('status', 'cancelled').order('created_at')),
       q(db.from('customers').select('*').order('name')),
       q(db.from('products').select('id,code,name_zh,name_en,name_hu,unit,base_price,active,sort').order('sort')),
       q(db.from('product_stock').select('id,on_hand,reserved')),
@@ -39,6 +39,13 @@ export default function Deliveries() {
   if (!data) return <div className="page"><ErrorBox error={error} /></div>
 
   const cust = id => data.customers.find(c => c.id === id) || {}
+  // where an order goes: the store (if the order is for one of the company's stores), else the company
+  const shipTo = o => {
+    const c = cust(o.customer_id), l = o.store
+    if (!l) return c
+    return { ...c, name: `${c.name} · ${l.name}`, address: l.address || c.address,
+      contact_person: l.contact_person || c.contact_person, phone: l.phone || c.phone, delivery_notes: l.notes || c.delivery_notes }
+  }
   const prod = id => data.products.find(p => p.id === id) || {}
   const run = id => data.runs.find(r => r.id === id)
   const groups = [
@@ -46,7 +53,7 @@ export default function Deliveries() {
     ...data.runs.map(r => ({ run: r, orders: data.orders.filter(o => o.delivery_id === r.id) })),
   ].filter(g => g.run || g.orders.length)
   const done = data.orders.filter(o => o.status === 'delivered').length
-  const ctx = { data, cust, prod, reload, setModal, print: list => setPrintList(list) }
+  const ctx = { data, cust, shipTo, prod, reload, setModal, print: list => setPrintList(list) }
 
   async function assign(order, runId) {
     try { await q(db.from('orders').update({ delivery_id: runId || null }).eq('id', order.id)); reload() }
@@ -93,7 +100,7 @@ export default function Deliveries() {
 
       {printList && createPortal(
         <div className="print-only">
-          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={cust(o.customer_id)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} />)}
+          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={shipTo(o)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} />)}
         </div>, document.body)}
     </div>
   )
@@ -141,7 +148,7 @@ function RunHeader({ run, orders, ctx }) {
 /* ---------------- one delivery stop ---------------- */
 function StopCard({ order: o, ctx, runs, onAssign }) {
   const t = useT()
-  const c = ctx.cust(o.customer_id)
+  const c = ctx.shipTo(o)
   const delivered = o.status === 'delivered'
   const internal = c.type === 'internal'
   const total = o.order_lines.reduce((s, l) => s + Number(delivered ? l.delivered_qty ?? l.qty : l.qty) * Number(l.unit_price || 0), 0)
@@ -278,7 +285,7 @@ async function uploadProofs(orderId, files) {
 function DeliverDialog({ order: o, ctx, onClose }) {
   const t = useT()
   const toast = useToast()
-  const c = ctx.cust(o.customer_id)
+  const c = ctx.shipTo(o)
   const [qty, setQty] = useState(() => Object.fromEntries(o.order_lines.map(l => [l.id, Number(l.qty)])))
   const [receiver, setReceiver] = useState(c.contact_person || '')
   const [files, setFiles] = useState([])
@@ -353,6 +360,11 @@ function NewDelivery({ date, ctx, onClose }) {
   const t = useT()
   const toast = useToast()
   const [customerId, setCustomerId] = useState('')
+  const [storeId, setStoreId] = useState('')
+  const { data: stores } = useData(() => customerId
+    ? q(db.from('customer_locations').select('*').eq('customer_id', customerId).eq('active', true).order('sort').order('name'))
+    : Promise.resolve([]), [customerId])
+  const store = stores?.find(l => l.id === storeId)
   const [deliveryDate, setDeliveryDate] = useState(date < todayISO() ? todayISO() : date)
   const [runId, setRunId] = useState('')
   const [notes, setNotes] = useState('')
@@ -375,7 +387,7 @@ function NewDelivery({ date, ctx, onClose }) {
     setBusy(true)
     try {
       const id = await q(db.rpc('place_order', {
-        p_delivery_date: deliveryDate, p_notes: notes || null, p_customer_id: customerId,
+        p_delivery_date: deliveryDate, p_notes: notes || null, p_customer_id: customerId, p_location_id: storeId || null,
         p_lines: chosen.map(([product_id, v]) => ({ product_id, qty: v })),
       }))
       if (runId) await q(db.from('orders').update({ delivery_id: runId }).eq('id', id))
@@ -387,19 +399,24 @@ function NewDelivery({ date, ctx, onClose }) {
     <Modal wide title={t('newDeliveryForCustomer')} onClose={onClose}>
       <div className="form-grid">
         <Field label={t('customer')}>
-          <select value={customerId} onChange={e => setCustomerId(e.target.value)} required>
+          <select value={customerId} onChange={e => { setCustomerId(e.target.value); setStoreId('') }} required>
             <option value="">{t('pickCustomer')}…</option>
             {ctx.data.customers.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </Field>
+        {stores?.length > 0 && <Field label={t('store')}>
+          <select value={storeId} onChange={e => setStoreId(e.target.value)} required className={!storeId ? 'is-missing' : ''}>
+            <option value="">–</option>
+            {stores.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select></Field>}
         <Field label={t('deliveryDate')}><input type="date" min={todayISO()} value={deliveryDate} onChange={e => { setDeliveryDate(e.target.value); setRunId('') }} /></Field>
       </div>
 
       {c && (
         <dl className="cust-info cust-panel">
           <div><dt>{t('ctype')}</dt><dd><span className={`tag tag-${c.type}`}>{t(c.type)}</span></dd></div>
-          <div><dt>{t('address')}</dt><dd>{c.address || '–'}</dd></div>
-          <div><dt>{t('contact')}</dt><dd>{[c.contact_person, c.phone].filter(Boolean).join(' · ') || '–'}</dd></div>
+          <div><dt>{t('address')}</dt><dd>{store?.address || c.address || '–'}</dd></div>
+          <div><dt>{t('contact')}</dt><dd>{[store?.contact_person || c.contact_person, store?.phone || c.phone].filter(Boolean).join(' · ') || '–'}</dd></div>
           {c.email && <div><dt>{t('email')}</dt><dd>{c.email}</dd></div>}
           {c.vat_no && <div><dt>{t('vatNo')}</dt><dd>{c.vat_no}</dd></div>}
           {c.delivery_notes && <div><dt>{t('deliveryNotes')}</dt><dd className="note-inline">{c.delivery_notes}</dd></div>}
@@ -444,7 +461,7 @@ function NewDelivery({ date, ctx, onClose }) {
         {c && c.type !== 'internal' && <b>{t('total')}: {fmtFt(total, t.lang)}</b>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('cancel')}</button>
-        <button className="btn btn-primary" disabled={!c || !chosen.length || busy} onClick={save}>{t('scheduleDelivery')}</button>
+        <button className="btn btn-primary" disabled={!c || !chosen.length || busy || (stores?.length > 0 && !storeId)} onClick={save}>{t('scheduleDelivery')}</button>
       </div>
     </Modal>
   )
