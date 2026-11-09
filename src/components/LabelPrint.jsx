@@ -89,10 +89,13 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const t = useT()
   const toast = useToast()
   const { isAdmin, profile } = useAuth()
-  const [opt, setOpt] = useState(() => ({
-    size: 'dk22205', length: 32, lang: 'hu', ingredients: true, cw: 62, ch: 32, template: 'simple', showQr: false, showStorage: true, showProducer: true,
-    ...read('nf-label-v3', {}),
-  }))
+  // 62 × 31.5 mm matches the "62mm x 31.5mm" paper in the Brother QL driver, so the PC needs no custom paper size
+  const [opt, setOpt] = useState(() => {
+    const saved = read('nf-label-v3', {})
+    if (Number(saved.length) === 32) saved.length = 31.5       // old default
+    return { size: 'dk22205', length: 31.5, lang: 'hu', ingredients: true, cw: 62, ch: 31.5, template: 'simple', showQr: false,
+             showStorage: true, showProducer: true, ...saved }
+  })
   const [recorder, setRecorder] = useState(profile?.display_name || '')
   const [amount, setAmount] = useState(null)
   const [unit, setUnit] = useState('g')
