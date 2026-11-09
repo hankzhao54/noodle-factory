@@ -63,7 +63,7 @@ export default function Users() {
               <td>{u.company || '–'}</td>
               <td>
                 <select value={u.role} onChange={e => update(u, { role: e.target.value })} aria-label={t('role')}>
-                  {['pending', 'restaurant', 'customer', 'staff', 'admin'].map(r => <option key={r} value={r}>{t('role_' + r)}</option>)}
+                  {['pending', 'restaurant', 'customer', 'worker', 'kiosk', 'staff', 'admin'].map(r => <option key={r} value={r}>{t('role_' + r)}</option>)}
                 </select>
               </td>
               <td>
@@ -138,7 +138,7 @@ function AddAccount({ customers, onClose, onDone }) {
         </div>
         <Field label={t('role')}>
           <select value={v.role} onChange={e => setV(s => ({ ...s, role: e.target.value, customer_id: '' }))}>
-            {['restaurant', 'customer', 'staff', 'admin'].map(r => <option key={r} value={r}>{t('role_' + r)}</option>)}
+            {['restaurant', 'customer', 'worker', 'kiosk', 'staff', 'admin'].map(r => <option key={r} value={r}>{t('role_' + r)}</option>)}
           </select>
         </Field>
         {linked ? (

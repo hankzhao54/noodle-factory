@@ -17,7 +17,7 @@ const CORS = {
 }
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
-const ROLES = ['pending', 'restaurant', 'customer', 'staff', 'admin']
+const ROLES = ['pending', 'restaurant', 'customer', 'worker', 'kiosk', 'staff', 'admin']
 const svc = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' }
 const noodle = { ...svc, 'Accept-Profile': 'noodle', 'Content-Profile': 'noodle' }
 

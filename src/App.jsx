@@ -26,6 +26,13 @@ import Reports from './pages/Reports'
 import PriceTiers from './pages/PriceTiers'
 import LegalPage from './legal/LegalPage'
 import Activity from './pages/Activity'
+import Employees from './pages/Employees'
+import Schedule from './pages/Schedule'
+import Timesheets from './pages/Timesheets'
+import WorkerApp from './worker/WorkerApp'
+import Kiosk from './worker/Kiosk'
+import ClockPanel from './components/ClockPanel'
+import { MyShifts } from './worker/WorkerApp'
 
 export default function App() {
   const [lang, setLangState] = useState(() => localStorage.getItem('nf-lang') || 'hu')
@@ -60,6 +67,8 @@ function Gate() {
   if (!session) return <Login />
   if (!profile || profile.role === 'pending') return <RequestAccess profile={profile} />
   if (profile.role === 'customer' || profile.role === 'restaurant') return <Portal />
+  if (profile.role === 'worker') return <WorkerApp />
+  if (profile.role === 'kiosk') return <Kiosk />
   return <StaffShell />
 }
 
@@ -88,6 +97,9 @@ function StaffShell() {
     ['/', 'nav_dashboard'], ['/orders', 'nav_orders'], ['/production', 'nav_production'],
     ['/deliveries', 'nav_deliveries'], ['/inventory', 'nav_inventory'], ['/purchasing', 'nav_purchasing'], ['/reports', 'nav_reports'],
   ]
+  const people = [
+    ['/clock', 'nav_clock'], ['/schedule', 'nav_schedule'], ['/timesheets', 'nav_timesheets'], ...(isAdmin ? [['/employees', 'nav_employees']] : []),
+  ]
   const setup = [
     ['/products', 'nav_products'], ['/materials', 'nav_materials'], ['/suppliers', 'nav_suppliers'],
     ['/customers', 'nav_customers'], ['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(isAdmin ? [['/users', 'nav_users'], ['/activity', 'nav_activity']] : []),
@@ -102,6 +114,8 @@ function StaffShell() {
         <nav aria-label="Main">
           <p className="nav-group">{t('nav_group_work')}</p>
           {work.map(([to, k]) => <NavLink key={to} to={to} end={to === '/'}>{t(k)}</NavLink>)}
+          <p className="nav-group">{t('nav_group_people')}</p>
+          {people.map(([to, k]) => <NavLink key={to} to={to}>{t(k)}</NavLink>)}
           <p className="nav-group">{t('nav_group_setup')}</p>
           {setup.map(([to, k]) => <NavLink key={to} to={to}>{t(k)}</NavLink>)}
         </nav>
@@ -134,11 +148,28 @@ function StaffShell() {
           <Route path="/rules" element={<RuleSettings />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/price-tiers" element={<PriceTiers />} />
+          <Route path="/clock" element={<ClockPage />} />
+          <Route path="/schedule" element={<Schedule />} />
+          <Route path="/timesheets" element={<Timesheets />} />
+          {isAdmin && <Route path="/employees" element={<Employees />} />}
+          <Route path="/kiosk" element={<Kiosk embedded />} />
           {isAdmin && <Route path="/users" element={<Users />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
+    </div>
+  )
+}
+
+function ClockPage() {
+  const t = useT()
+  return (
+    <div className="page narrow">
+      <h1>{t('nav_clock')}</h1>
+      <ClockPanel />
+      <h2 className="section-title">{t('mySchedule')}</h2>
+      <MyShifts />
     </div>
   )
 }
