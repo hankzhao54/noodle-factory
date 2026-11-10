@@ -8,12 +8,15 @@ import QtyPicker, { cartTotal } from '../components/QtyPicker'
 export default function Orders() {
   const t = useT()
   const [tab, setTab] = useState('open')
-  const [from, setFrom] = useState(todayISO(-7))
+  const [from, setFrom] = useState('')          // optional: only orders delivered on/after this day
   const [detail, setDetail] = useState(null)
   const [creating, setCreating] = useState(false)
   const { data, loading, error, reload } = useData(async () => {
     const [orders, customers, products, stores] = await Promise.all([
-      q(db.from('orders').select('*, order_lines(*), store:customer_locations(name,address)').gte('delivery_date', from).order('delivery_date').order('created_at')),
+      // newest orders first; the delivery-date filter is optional
+      q((from ? db.from('orders').select('*, order_lines(*), store:customer_locations(name,address)').gte('delivery_date', from)
+              : db.from('orders').select('*, order_lines(*), store:customer_locations(name,address)'))
+        .order('created_at', { ascending: false }).limit(500)),
       q(db.from('customers').select('id,name,type').order('name')),
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price,min_order_qty,pack_size_g,active,sort,image_path').order('sort')),
       q(db.from('customer_locations').select('id,customer_id,name').eq('active', true).order('sort').order('name')),
@@ -31,7 +34,8 @@ export default function Orders() {
   return (
     <div className="page">
       <PageHead title={t('nav_orders')}>
-        <label className="inline-field">{t('deliveryDate')} ≥ <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="inline-field">{t('deliveryDate')} ≥ <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          {from && <button type="button" className="btn-link small" onClick={() => setFrom('')}>{t('all')}</button>}</label>
         <button className="btn btn-primary" onClick={() => setCreating(true)}>{t('newOrder')}</button>
       </PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[
@@ -41,11 +45,12 @@ export default function Orders() {
       ]} />
       {shown.length === 0 ? <Empty /> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>#</th><th>{t('deliveryDate')}</th><th>{t('customer')}</th><th>{t('lines')}</th>
+          <thead><tr><th>#</th><th>{t('orderedAt')}</th><th>{t('deliveryDate')}</th><th>{t('customer')}</th><th>{t('lines')}</th>
             <th className="num">{t('total')}</th><th>{t('status')}</th></tr></thead>
           <tbody>{shown.map(o => (
             <tr key={o.id} className="clickable" onClick={() => setDetail(o)}>
               <td className="mono-num">#{o.no}</td>
+              <td className="nowrap muted small">{new Date(o.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
               <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
               <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>

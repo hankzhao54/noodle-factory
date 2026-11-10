@@ -519,3 +519,4 @@ textarea { resize: vertical; }
 .line-gone td { text-decoration: line-through; color: var(--ink-3); }
 .line-gone td:last-child { text-decoration: none; }
 .btn-link.danger { color: var(--short); }
+.history-body .num .btn-link { margin-left: 8px; }

@@ -4,7 +4,7 @@ import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { LangSwitch } from '../App'
-import { Loading, ErrorBox, Empty, Status, Tabs, useToast, errText } from '../components/ui'
+import { Loading, ErrorBox, Empty, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import QtyPicker, { cartTotal } from '../components/QtyPicker'
 import { dateProblem, nextDates, deliveryDays, dayName } from '../lib/orderRules'
 import InstallHint from '../components/InstallHint'
@@ -20,14 +20,15 @@ export default function Portal() {
   const [tab, setTab] = useState('order')
   const [qty, setQty] = useState({})
   const { data, error, reload } = useData(async () => {
-    const [me, catalog, orders, rules, pinfo] = await Promise.all([
+    const [me, catalog, orders, rules, pinfo, editInfo] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
       q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
+      q(db.rpc('my_order_edit_info')).catch(() => ({})),
     ])
-    return { me, catalog, orders, rules, pinfo }
+    return { me, catalog, orders, rules, pinfo, editInfo: editInfo || {} }
   })
 
   return (
@@ -47,7 +48,7 @@ export default function Portal() {
         <OrderSheet blocked={needTerms} info={info} pinfo={data.pinfo} internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
           onPlaced={() => { setQty({}); reload(); setTab('history') }} />
       ) : (
-        <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} reload={reload}
+        <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} editInfo={data.editInfo} reload={reload}
           onAgain={o => {
             const next = {}
             o.order_lines.forEach(l => { if (data.catalog.some(p => p.id === l.product_id)) next[l.product_id] = Number(l.qty) })
@@ -163,29 +164,44 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
   )
 }
 
-function History({ internal, orders, catalog, reload, onAgain }) {
+function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
   const t = useT()
   const toast = useToast()
   const [openId, setOpenId] = useState(null)
-  const [ask, setAsk] = useState(null)        // 'order:<id>' or 'line:<id>' waiting for the second tap
+  const [ask, setAsk] = useState(null)        // 'order:<id>' waiting for the second tap
+  const [editing, setEditing] = useState(null) // order id being changed
+  const [draft, setDraft] = useState({})       // line id → qty (0 = cancel)
+  const [busy, setBusy] = useState(false)
   const prod = id => catalog.find(p => p.id === id) || {}
   if (!orders.length) return <Empty />
   async function cancel(o) {
     try { await q(db.rpc('cancel_my_order', { p_order_id: o.id })); setAsk(null); toast(t('o_cancelled')); reload() }
-    catch (e) { setAsk(null); toast(errText(e), 'error') }
+    catch (e) { setAsk(null); toast(/can no longer/.test(e.message || '') ? t('cantChangeNow') : errText(e), 'error') }
   }
-  async function cancelLine(l) {
-    try { await q(db.rpc('cancel_my_order_line', { p_line: l.id })); setAsk(null); toast(t('lineCancelled')); reload() }
-    catch (e) { setAsk(null); toast(errText(e), 'error') }
+  async function save(o) {
+    const changes = o.order_lines.filter(l => l.id in draft && Number(draft[l.id] || 0) !== Number(l.qty))
+      .map(l => ({ line_id: l.id, qty: Number(draft[l.id] || 0) }))
+    if (!changes.length) { setEditing(null); return }
+    setBusy(true)
+    try {
+      const r = await q(db.rpc('edit_my_order', { p_order: o.id, p_changes: changes }))
+      toast(r?.cancelled ? t('o_cancelled') : t('orderChanged')); setEditing(null); setDraft({}); reload()
+    } catch (e) {
+      toast(/production planned|can no longer/.test(e.message || '') ? t('cantChangeNow') : errText(e), 'error')
+    } finally { setBusy(false) }
   }
   return (
     <ul className="history">
       {orders.map(o => {
         const total = o.order_lines.reduce((s, l) => s + l.qty * (l.unit_price || 0), 0)
         const open = openId === o.id
+        const info = editInfo?.[o.id]                       // present = this account may still change it
+        const locked = new Set(info?.locked || [])
+        const isEditing = editing === o.id
+        const q0 = l => (l.id in draft ? draft[l.id] : Number(l.qty))
         return (
           <li key={o.id} className={open ? 'open' : ''}>
-            <button className="history-row" aria-expanded={open} onClick={() => setOpenId(open ? null : o.id)}>
+            <button className="history-row" aria-expanded={open} onClick={() => { setOpenId(open ? null : o.id); setEditing(null); setDraft({}) }}>
               <span className="mono-num">#{o.no}</span>
               <span>{fmtDate(o.delivery_date, t.lang)}{o.store ? <span className="muted"> · {o.store.name}</span> : ''}</span>
               <Status value={o.status} prefix="o" />
@@ -193,21 +209,37 @@ function History({ internal, orders, catalog, reload, onAgain }) {
             </button>
             {open && (
               <div className="history-body">
-                <ul>{o.order_lines.map(l => (
-                  <li key={l.id}><span>{t.pick(prod(l.product_id)) || '–'}</span>
-                    <span className="num">{fmtNum(l.qty, t.lang)} {prod(l.product_id).unit}{internal ? '' : ` × ${fmtFt(l.unit_price, t.lang)}`}
-                      {o.status === 'submitted' && o.order_lines.length > 1 && (ask === 'line:' + l.id
-                        ? <button className="btn-link danger small" onClick={() => cancelLine(l)}> {t('cancelLineConfirm')}</button>
-                        : <button className="btn-link small" onClick={() => setAsk('line:' + l.id)} aria-label={`${t('cancelLine')} ${t.pick(prod(l.product_id))}`}> ✕</button>)}
-                    </span></li>
-                ))}</ul>
+                <ul>{o.order_lines.map(l => {
+                  const gone = isEditing && !(Number(q0(l)) > 0)
+                  return (
+                  <li key={l.id} className={gone ? 'line-gone' : ''}><span>{t.pick(prod(l.product_id)) || '–'}</span>
+                    <span className="num">
+                      {isEditing && internal && !locked.has(l.id) && !gone
+                        ? <><NumInput className="input-sm" value={q0(l)} min={0} aria-label={`${t('qty')} ${t.pick(prod(l.product_id))}`}
+                            onChange={v => setDraft(d => ({ ...d, [l.id]: v ?? 0 }))} /> {prod(l.product_id).unit}</>
+                        : <>{fmtNum(isEditing ? q0(l) : l.qty, t.lang)} {prod(l.product_id).unit}{internal ? '' : ` × ${fmtFt(l.unit_price, t.lang)}`}</>}
+                      {isEditing && (locked.has(l.id)
+                        ? <span className="muted small"> 🔒 {t('productionPlanned')}</span>
+                        : gone
+                          ? <button className="btn-link small" onClick={() => setDraft(d => ({ ...d, [l.id]: Number(l.qty) }))}> {t('undo')}</button>
+                          : <button className="btn-link small danger" onClick={() => setDraft(d => ({ ...d, [l.id]: 0 }))} aria-label={`${t('cancelLine')} ${t.pick(prod(l.product_id))}`}> ✕</button>)}
+                    </span></li>)
+                })}</ul>
                 {o.notes && <p className="muted small">{o.notes}</p>}
+                {isEditing && <p className="muted small">{t(internal ? 'myEditHintInternal' : 'myEditHintExternal')}</p>}
                 <div className="row-gap">
-                  <button className="btn btn-sm" onClick={() => onAgain(o)}>{t('orderAgain')}</button>
-                  {o.status === 'submitted' && (ask === 'order:' + o.id
-                    ? <button className="btn btn-sm btn-danger" onClick={() => cancel(o)}>{t('cancelOrderConfirm')}</button>
-                    : <button className="btn btn-sm btn-danger-quiet" onClick={() => setAsk('order:' + o.id)}>{t('cancelOrder')}</button>)}
+                  {isEditing ? <>
+                    <button className="btn btn-sm" onClick={() => { setEditing(null); setDraft({}) }}>{t('cancel')}</button>
+                    <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => save(o)}>{t('saveChanges')}</button>
+                  </> : <>
+                    <button className="btn btn-sm" onClick={() => onAgain(o)}>{t('orderAgain')}</button>
+                    {info && <button className="btn btn-sm" onClick={() => { setEditing(o.id); setDraft({}) }}>{t(internal ? 'changeOrder' : 'cancelItems')}</button>}
+                    {info && !locked.size && (ask === 'order:' + o.id
+                      ? <button className="btn btn-sm btn-danger" onClick={() => cancel(o)}>{t('cancelOrderConfirm')}</button>
+                      : <button className="btn btn-sm btn-danger-quiet" onClick={() => setAsk('order:' + o.id)}>{t('cancelOrder')}</button>)}
+                  </>}
                 </div>
+                {internal && o.status === 'confirmed' && !info && o.delivery_date >= todayISO() && <p className="muted small">{t('cantChangeNow')}</p>}
               </div>
             )}
           </li>

@@ -11,7 +11,7 @@
 | 模块 | 做什么 |
 |---|---|
 | 今日 | 待确认订单、待开通账号、今天送货、明天订单、待生产批次、在途进货；明天的生产计划（要做几批、原料够不够）、原料不足（按供应商、建议进货量）、快过期/已过期的原料批号 |
-| 订单 | 看全部订单，确认 → 备好 → 送达；可代客户下单 |
+| 订单 | 默认显示全部订单（最新下单的在前，最多 500 张），可选只看某个送货日之后； 看全部订单，确认 → 备好 → 送达；可代客户下单 |
 | 生产 | 按交货日汇总订单需求 − 现有库存 − 已排生产 = 需生产，自动建议批数；检查原料够不够；完成生产自动扣原料、加成品、生成批号 |
 | 送货 | 新建送货：选客户自动带出地址、电话、联系人、送货备注，选货品时能看到库存；按送货趟（司机/车辆）分组，装车清单；确认送达时可改实送数量、填签收人、拍照上传签收凭证（只给内部看，可下载）；按实送数量自动扣成品库存；打印单张或整趟送货单（抬头为公司名、地址、税号，每个产品下列出配料、过敏原和储存条件，价格标明 nettó） |
 | 库存 | 原料/成品现有量、最低库存提醒、盘点、报损、完整出入库记录；原料按批号管理：收货生成批号（没填就用 P+进货单号），生产时按「最早到期先用」自动扣，过期批号不会被自动用掉；每个原料可展开看各批号剩余和到期日 |
@@ -22,7 +22,7 @@
 | 操作记录 | 管理员菜单「操作记录」：数据库触发器记录 17 张业务表的每次新建/修改/删除（谁、什么时候、旧值 → 新值），通过任何页面或 RPC 的改动都会记；用户在界面上遇到的错误和网页脚本错误也会记（`log_client_error`，同一条一分钟最多一次，每人 10 分钟最多 30 条）。可按时间、操作、对象、用户筛选和搜索，点一行看详情。只有管理员能读，没人能改或删 |
 | 多门店客户 | 客户 = 公司（价格、价格分档、开票），公司下可加多个门店（`customer_locations`：送货地址、联系人、电话、送货日、送货备注）。门店送货日不填就跟公司一样。有门店的公司下单必须选门店（`place_order` 的 `p_location_id`）。账号可以是公司账号（能给所有门店下单、看全部订单），也可以在「账号」页限定到某个门店（只能给这个店下单、只看这个店的订单，数据库 RLS 控制）。订单列表、送货单、送货卡片、订单邮件、Slack 都显示门店名和门店地址 |
 | 一个账号多个客户 | 下单账号可以关联多个客户（`profile_customers`），比如一位员工同时给自家餐厅和一个外部客户下单。在「账号」页点「再关联一个客户」添加，× 去掉。下单页顶部「正在为谁下单」切换（`switch_customer()`），切换后价格、订单记录、送货日、起订量都按那个客户算，角色自动跟着客户类型变（自家餐厅 / 外部客户）。订单邮件发给所有关联了这个客户的账号 |
-| 修改 / 部分取消 / 拆分订单 | 后台点开订单（送达前）：「修改 / 部分取消」改数量或「取消这项」去掉某个产品（全部去掉 = 整单取消），价格不变；「拆分订单」勾选产品 + 新送货日 → 变成一张新订单（`split_from`，不重发新订单邮件）。客户在「我的订单」里，订单还在「待确认」时可以 ✕ 取消单个产品。每次修改都进操作记录，Slack 收到「订单已修改」 |
+| 修改 / 部分取消 / 拆分订单 | 后台点开订单（送达前）：「修改 / 部分取消」改数量或「取消这项」去掉某个产品（全部去掉 = 整单取消），价格不变；「拆分订单」勾选产品 + 新送货日 → 变成一张新订单（`split_from`，不重发新订单邮件）。外部客户在「我的订单」里，订单还在「待确认」时可以 ✕ 取消单个产品；自家餐厅在工厂排生产之前（这个产品还没有在下单之后、送货日之前排过生产批次）可以改数量、取消产品或整单取消，排了生产的产品显示 🔒。每次修改都进操作记录，Slack 收到「订单已修改」 |
 | 标签设置 | 「Címke beállítások」页：每个产品的保质期（天）和每张标签默认数量（kg），以及没填时用的默认值；打印时自动带出，数量默认按 kg |
 | 订单邮件 | 用 Resend 从 rendeles@101bistro.hu 发信：外部客户下单 →「已收到」，工厂确认 →「已确认」（员工代下单直接发「已确认」）；每个新订单给工厂发提醒；自家餐厅不收客户邮件。「E-mail beállítások」页可切换 关闭/测试/正式、改通知地址，并查看发送记录。数据库触发器 → Edge Function `noodle-order-email`（`supabase/functions/`）→ Resend；需要在 Supabase Edge Function Secrets 里设 `RESEND_API_KEY` |
 | 下单规则 | 截单时间（布达佩斯时间）、提前天数、工厂送货日；匈牙利法定假日自动不送货（含复活节/圣灵降临节等移动假日和 12 月 24–26 日，每年自动算，`hu_holidays()`），调休日（áthelyezett pihenőnap）可选，日期每年按政府公告填；另外可手动加休息日，设置页列出接下来不送货的日子；每个客户可再限定送货日。客户下单页只显示能选的送货日，服务器也会检查；员工代下单不受限制 |
@@ -53,7 +53,7 @@
 
 1. **建表**：Supabase → SQL Editor，运行 `supabase/001_noodle_schema.sql`
 2. **开放 schema**：Settings → API → Exposed schemas，加上 `noodle`（和之前的 `ordering` 一样）
-3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`、`014_admin_users.sql`、`015_price_tiers.sql`、`016_compliance.sql`、`017_hu_holidays.sql`、`018_slack.sql`、`019_audit_log.sql`、`020_locations.sql`、`021_timeclock.sql`（已由 `024_remove_timeclock.sql` 撤销）、`023_multi_customer_accounts.sql`、`025_order_changes.sql`
+3. 依次运行 `supabase/003_restaurant_role.sql`、`005_default_hungarian.sql`、`006_delivery_proof.sql`、`007_delivery_proof_storage.sql`、`008_settings.sql`、`009_material_on_label.sql`、`010_label_defaults.sql`、`011_images.sql`、`012_order_emails.sql`、`013_lots_rules.sql`、`014_admin_users.sql`、`015_price_tiers.sql`、`016_compliance.sql`、`017_hu_holidays.sql`、`018_slack.sql`、`019_audit_log.sql`、`020_locations.sql`、`021_timeclock.sql`（已由 `024_remove_timeclock.sql` 撤销）、`023_multi_customer_accounts.sql`、`025_order_changes.sql`、`026_internal_order_edits.sql`
 4. （可选）运行 `supabase/002_demo_data.sql` 装演示数据，文件底部有一键删除的 SQL
 5. **本地运行**：
    ```
