@@ -167,12 +167,16 @@ function History({ internal, orders, catalog, reload, onAgain }) {
   const t = useT()
   const toast = useToast()
   const [openId, setOpenId] = useState(null)
+  const [ask, setAsk] = useState(null)        // 'order:<id>' or 'line:<id>' waiting for the second tap
   const prod = id => catalog.find(p => p.id === id) || {}
   if (!orders.length) return <Empty />
   async function cancel(o) {
-    if (!confirm(t('cancelOrder') + '?')) return
-    try { await q(db.rpc('cancel_my_order', { p_order_id: o.id })); toast(t('o_cancelled')); reload() }
-    catch (e) { toast(errText(e), 'error') }
+    try { await q(db.rpc('cancel_my_order', { p_order_id: o.id })); setAsk(null); toast(t('o_cancelled')); reload() }
+    catch (e) { setAsk(null); toast(errText(e), 'error') }
+  }
+  async function cancelLine(l) {
+    try { await q(db.rpc('cancel_my_order_line', { p_line: l.id })); setAsk(null); toast(t('lineCancelled')); reload() }
+    catch (e) { setAsk(null); toast(errText(e), 'error') }
   }
   return (
     <ul className="history">
@@ -191,12 +195,18 @@ function History({ internal, orders, catalog, reload, onAgain }) {
               <div className="history-body">
                 <ul>{o.order_lines.map(l => (
                   <li key={l.id}><span>{t.pick(prod(l.product_id)) || '–'}</span>
-                    <span className="num">{fmtNum(l.qty, t.lang)} {prod(l.product_id).unit}{internal ? '' : ` × ${fmtFt(l.unit_price, t.lang)}`}</span></li>
+                    <span className="num">{fmtNum(l.qty, t.lang)} {prod(l.product_id).unit}{internal ? '' : ` × ${fmtFt(l.unit_price, t.lang)}`}
+                      {o.status === 'submitted' && o.order_lines.length > 1 && (ask === 'line:' + l.id
+                        ? <button className="btn-link danger small" onClick={() => cancelLine(l)}> {t('cancelLineConfirm')}</button>
+                        : <button className="btn-link small" onClick={() => setAsk('line:' + l.id)} aria-label={`${t('cancelLine')} ${t.pick(prod(l.product_id))}`}> ✕</button>)}
+                    </span></li>
                 ))}</ul>
                 {o.notes && <p className="muted small">{o.notes}</p>}
                 <div className="row-gap">
                   <button className="btn btn-sm" onClick={() => onAgain(o)}>{t('orderAgain')}</button>
-                  {o.status === 'submitted' && <button className="btn btn-sm btn-danger-quiet" onClick={() => cancel(o)}>{t('cancelOrder')}</button>}
+                  {o.status === 'submitted' && (ask === 'order:' + o.id
+                    ? <button className="btn btn-sm btn-danger" onClick={() => cancel(o)}>{t('cancelOrderConfirm')}</button>
+                    : <button className="btn btn-sm btn-danger-quiet" onClick={() => setAsk('order:' + o.id)}>{t('cancelOrder')}</button>)}
                 </div>
               </div>
             )}

@@ -516,3 +516,6 @@ textarea { resize: vertical; }
 .link-chip .btn-link { padding: 0 6px; text-decoration: none; font-size: 1rem; }
 .link-add { max-width: 220px; }
 .is-missing-text { color: var(--short); font-size: 0.85rem; }
+.line-gone td { text-decoration: line-through; color: var(--ink-3); }
+.line-gone td:last-child { text-decoration: none; }
+.btn-link.danger { color: var(--short); }

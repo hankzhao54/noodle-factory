@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
-import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, useToast, errText } from '../components/ui'
+import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import QtyPicker, { cartTotal } from '../components/QtyPicker'
 
 export default function Orders() {
@@ -72,7 +72,31 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
   const [askCancel, setAskCancel] = useState(false)
-  const total = order.order_lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
+  const [mode, setMode] = useState('view')                 // view | edit | split
+  const [edit, setEdit] = useState({})                     // line id → new qty (0 = cancel this product)
+  const [pick, setPick] = useState([])                     // line ids to move (split)
+  const [splitDate, setSplitDate] = useState(() => { const d = new Date(order.delivery_date + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })
+  const [busy, setBusy] = useState(false)
+  const changeable = !readOnly && ['submitted', 'confirmed', 'ready'].includes(order.status)
+  const qtyOf = l => (l.id in edit ? edit[l.id] : Number(l.qty))
+  const total = order.order_lines.reduce((s, l) => s + (mode === 'edit' ? qtyOf(l) || 0 : l.qty) * l.unit_price, 0)
+  async function saveEdit() {
+    const changes = order.order_lines.filter(l => l.id in edit && Number(edit[l.id] || 0) !== Number(l.qty))
+      .map(l => ({ line_id: l.id, qty: Number(edit[l.id] || 0) }))
+    if (!changes.length) return setMode('view')
+    setBusy(true)
+    try {
+      const r = await q(db.rpc('edit_order_lines', { p_order: order.id, p_changes: changes }))
+      toast(r?.cancelled ? t('o_cancelled') : t('orderChanged')); onDone()
+    } catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
+  async function doSplit() {
+    setBusy(true)
+    try {
+      await q(db.rpc('split_order', { p_order: order.id, p_lines: pick, p_delivery_date: splitDate }))
+      toast(t('orderSplitDone')); onDone()
+    } catch (e) { toast(/keep at least one/.test(e.message || '') ? t('splitKeepOne') : errText(e), 'error'); setBusy(false) }
+  }
   const setStatus = async status => {
     try {
       await q(db.from('orders').update({ status }).eq('id', order.id))
@@ -86,18 +110,50 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
+      {mode !== 'view' && <p className="note-box small">{t(mode === 'edit' ? 'editOrderHint' : 'splitOrderHint')}</p>}
       <table className="table compact">
-        <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th><th className="num">{t('total')}</th></tr></thead>
-        <tbody>{order.order_lines.map(l => (
-          <tr key={l.id}><td>{t.pick(prod(l.product_id))}</td>
-            <td className="num">{fmtNum(l.qty, t.lang)} <span className="unit">{prod(l.product_id).unit}</span></td>
+        <thead><tr>{mode === 'split' && <th />}<th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th><th className="num">{t('total')}</th>{mode === 'edit' && <th />}</tr></thead>
+        <tbody>{order.order_lines.map(l => {
+          const q0 = mode === 'edit' ? qtyOf(l) : Number(l.qty)
+          const gone = mode === 'edit' && !(Number(q0) > 0)
+          return (
+          <tr key={l.id} className={gone ? 'line-gone' : ''}>
+            {mode === 'split' && <td><input type="checkbox" checked={pick.includes(l.id)} aria-label={t.pick(prod(l.product_id))}
+              onChange={e => setPick(p => e.target.checked ? [...p, l.id] : p.filter(x => x !== l.id))} /></td>}
+            <td>{t.pick(prod(l.product_id))}</td>
+            <td className="num">{mode === 'edit'
+              ? <NumInput className="input-sm" value={q0} min={0} onChange={v => setEdit(e => ({ ...e, [l.id]: v ?? 0 }))} aria-label={`${t('qty')} ${t.pick(prod(l.product_id))}`} />
+              : fmtNum(l.qty, t.lang)} <span className="unit">{prod(l.product_id).unit}</span></td>
             <td className="num muted">{fmtFt(l.unit_price, t.lang)}</td>
-            <td className="num">{fmtFt(l.qty * l.unit_price, t.lang)}</td></tr>
-        ))}</tbody>
+            <td className="num">{fmtFt((Number(q0) || 0) * l.unit_price, t.lang)}</td>
+            {mode === 'edit' && <td>{gone
+              ? <button type="button" className="btn-link small" onClick={() => setEdit(e => ({ ...e, [l.id]: Number(l.qty) }))}>{t('undo')}</button>
+              : <button type="button" className="btn-link small danger" onClick={() => setEdit(e => ({ ...e, [l.id]: 0 }))}>{t('cancelLine')}</button>}</td>}
+          </tr>)
+        })}</tbody>
         <tfoot><tr><td colSpan={3}>{t('total')}</td><td className="num"><b>{fmtFt(total, t.lang)}</b></td></tr></tfoot>
       </table>
       {order.notes && <p className="note-box">{order.notes}</p>}
-      {!readOnly && (
+      {mode === 'edit' && (
+        <div className="modal-foot">
+          <span className="grow" />
+          <button className="btn" onClick={() => { setMode('view'); setEdit({}) }}>{t('cancel')}</button>
+          <button className="btn btn-primary" disabled={busy} onClick={saveEdit}>{t('saveChanges')}</button>
+        </div>)}
+      {mode === 'split' && (
+        <div className="modal-foot">
+          <label className="row-gap small">{t('newDeliveryDate')}
+            <input type="date" value={splitDate} min={todayISO()} onChange={e => setSplitDate(e.target.value)} /></label>
+          <span className="grow" />
+          <button className="btn" onClick={() => { setMode('view'); setPick([]) }}>{t('cancel')}</button>
+          <button className="btn btn-primary" disabled={busy || !pick.length || pick.length === order.order_lines.length || !splitDate} onClick={doSplit}>{t('moveToNewOrder')}</button>
+        </div>)}
+      {mode === 'view' && changeable && (
+        <div className="row-gap" style={{ marginTop: 8 }}>
+          <button className="btn btn-sm" onClick={() => setMode('edit')}>{t('editOrder')}</button>
+          {order.order_lines.length > 1 && <button className="btn btn-sm" onClick={() => setMode('split')}>{t('splitOrder')}</button>}
+        </div>)}
+      {!readOnly && mode === 'view' && (
         <div className="modal-foot">
           {['submitted', 'confirmed', 'ready'].includes(order.status) &&
             (askCancel

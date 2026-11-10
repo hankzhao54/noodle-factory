@@ -1,5 +1,5 @@
 // noodle-order-email: called by the orders trigger (pg_net) when an order is placed, confirmed or cancelled,
-// and by slack_test() for the admin test button.
+// by notify_order_change() when an order is changed / split (Slack only), and by slack_test() for the admin test button.
 // Auth: the trigger sends a shared secret (x-noodle-hook) that the database checks in order_email_payload().
 // Secrets: RESEND_API_KEY (emails), SLACK_WEBHOOK_URL (Slack channel), set in Supabase → Edge Functions → Secrets.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
@@ -42,7 +42,7 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
   const secret = req.headers.get('x-noodle-hook')
   if (!secret) return json({ error: 'unauthorized' }, 401)
-  let input: { order_id?: string; event?: string }
+  let input: { order_id?: string; event?: string; detail?: string }
   try { input = await req.json() } catch { return json({ error: 'bad json' }, 400) }
 
   // admin "send test" button: no order
@@ -54,7 +54,7 @@ Deno.serve(async req => {
                                    p_status: r.status, p_detail: r.detail }) } catch { /* ignore */ }
     return json({ ok: true, slack: r.status })
   }
-  if (!input.order_id || !['placed', 'confirmed', 'cancelled'].includes(input.event || '')) return json({ error: 'bad input' }, 400)
+  if (!input.order_id || !['placed', 'confirmed', 'cancelled', 'changed'].includes(input.event || '')) return json({ error: 'bad input' }, 400)
 
   let payload
   try { payload = await rpc('order_email_payload', { p_order: input.order_id, p_secret: secret }) }
@@ -65,14 +65,14 @@ Deno.serve(async req => {
   const results: unknown[] = []
 
   // Slack: new orders and cancellations
-  if (s.slack_mode === 'on' && ['placed', 'cancelled'].includes(input.event!)) {
-    const r = await postSlack(buildSlack(payload, input.event!))
+  if (s.slack_mode === 'on' && ['placed', 'cancelled', 'changed'].includes(input.event!)) {
+    const r = await postSlack(buildSlack(payload, input.event!, String(input.detail || '').slice(0, 1500)))
     try { await rpc('log_email', { p_secret: secret, p_order: input.order_id, p_kind: 'slack', p_recipient: 'Slack',
                                    p_status: r.status, p_detail: r.detail }) } catch { /* ignore */ }
     results.push({ kind: 'slack', status: r.status })
   }
 
-  const mails = input.event === 'cancelled' ? [] : buildEmails(payload, input.event!)
+  const mails = ['cancelled', 'changed'].includes(input.event!) ? [] : buildEmails(payload, input.event!)
   for (const m of mails) {
     let status = 'sent', detail = ''
     if (!RESEND) { status = 'failed'; detail = 'RESEND_API_KEY is not set' }

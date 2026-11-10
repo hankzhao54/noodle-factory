@@ -4,6 +4,7 @@ import { asLang, type Lang } from './email.ts'
 const T: Record<string, [string, string, string]> = {
   placed: ['Új rendelés', 'New order', '新订单'],
   cancelled: ['Rendelés lemondva', 'Order cancelled', '订单已取消'],
+  changed: ['Rendelés módosítva', 'Order changed', '订单已修改'],
   delivery: ['Szállítás', 'Delivery', '送货'],
   submitted: ['visszaigazolásra vár', 'waiting for confirmation', '待确认'],
   confirmed: ['visszaigazolva', 'confirmed', '已确认'],
@@ -32,7 +33,7 @@ export function slackTest(settings: any) {
   return { text: tr(l, 'test') }
 }
 
-export function buildSlack(p: any, event: string) {
+export function buildSlack(p: any, event: string, detail?: string) {
   const s = p.settings || {}
   const l = asLang(s.slack_lang)
   const o = p.order, c = p.customer
@@ -40,13 +41,16 @@ export function buildSlack(p: any, event: string) {
   const internal = c.type === 'internal'
   const head = event === 'cancelled'
     ? `:x: *${tr(l, 'cancelled')} #${o.no}* · ${esc(c.name)}`
-    : `:ramen: *${tr(l, 'placed')} #${o.no}* · ${esc(c.name)} (${tr(l, internal ? 'internal' : 'wholesale')})`
+    : event === 'changed'
+      ? `:pencil2: *${tr(l, 'changed')} #${o.no}* · ${esc(c.name)}`
+      : `:ramen: *${tr(l, 'placed')} #${o.no}* · ${esc(c.name)} (${tr(l, internal ? 'internal' : 'wholesale')})`
   const lines = (p.lines || []).map((x: any) => `• ${esc(name(x))} × ${num(Number(x.qty), l)} ${esc(x.unit)}`)
   const total = (p.lines || []).reduce((t: number, x: any) => t + Number(x.qty) * Number(x.unit_price || 0), 0)
   const parts = [
     head,
     `${tr(l, 'delivery')}: *${date(o.delivery_date, l)}*` + (event === 'placed' ? ` · ${tr(l, o.status === 'confirmed' ? 'confirmed' : 'submitted')}` : ''),
-    event === 'placed' ? lines.join('\n') : '',
+    event === 'changed' && detail ? esc(detail) : '',
+    event === 'placed' || event === 'changed' ? lines.join('\n') : '',
     event === 'placed' && !internal && total > 0 ? `${tr(l, 'total')}: ${ft(total)} ${tr(l, 'net')}` : '',
     o.notes ? `${tr(l, 'notes')}: ${esc(o.notes)}` : '',
     s.app_url ? `<${String(s.app_url).replace(/\/$/, '')}/orders|${tr(l, 'open')}>` : '',
