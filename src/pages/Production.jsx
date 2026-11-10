@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
+import { useAuth } from '../lib/auth'
 import { useT, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import { Link } from 'react-router-dom'
@@ -15,6 +16,8 @@ export default function Production() {
   const [finishing, setFinishing] = useState(null)
   const [adding, setAdding] = useState(null)
   const [labelFor, setLabelFor] = useState(null)
+  const [undoAsk, setUndoAsk] = useState(null)       // batch id waiting for "yes, undo"
+  const { isAdmin } = useAuth()
   const { data, loading, error, reload } = useData(async () => {
     const [products, recipe, mstock, pstock, demand, batches] = await Promise.all([
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort').eq('active', true).order('sort')),
@@ -42,6 +45,12 @@ export default function Production() {
   const needRows = materialNeeds(byProduct, data.recipe, data.mstock)
 
   const shown = data.batches.filter(b => tab === 'all' || b.status === tab)
+
+  // admin: put a batch finished by mistake back to planned (stock and lot are reversed)
+  async function undoFinish(b) {
+    try { await q(db.rpc('undo_production', { p_batch_id: b.id })); setUndoAsk(null); toast(t('undoFinishDone')); reload() }
+    catch (e) { setUndoAsk(null); toast(/lot already used/.test(e.message || '') ? t('undoFinishUsed') : errText(e), 'error') }
+  }
 
   async function cancelBatch(b) {
     try { await q(db.from('production_batches').update({ status: 'cancelled' }).eq('id', b.id)); reload() }
@@ -114,7 +123,11 @@ export default function Production() {
                 <td className="num"><LossTag batch={b} product={p} /></td>
                 <td className="muted">{b.lot_no ? <Link to={`/trace/${encodeURIComponent(b.lot_no)}`}>{b.lot_no}</Link> : '–'}</td>
                 <td><Status value={b.status} prefix="b" /></td>
-                <td className="act">{b.status === 'done' && <button className="btn btn-sm" onClick={() => setLabelFor(b.id)}>{t('printLabels')}</button>}{b.status === 'planned' && <>
+                <td className="act">{b.status === 'done' && <>
+                  {isAdmin && (undoAsk === b.id
+                    ? <button className="btn btn-sm btn-danger" onClick={() => undoFinish(b)}>{t('undoFinishConfirm')}</button>
+                    : <button className="btn btn-quiet btn-sm" title={t('undoFinishHint')} onClick={() => setUndoAsk(b.id)}>{t('undoFinish')}</button>)}
+                  <button className="btn btn-sm" onClick={() => setLabelFor(b.id)}>{t('printLabels')}</button></>}{b.status === 'planned' && <>
                   <button className="btn btn-quiet" onClick={() => cancelBatch(b)}>{t('cancel')}</button>
                   <button className="btn btn-sm btn-primary" onClick={() => setFinishing(b)}>{t('finish')}</button>
                 </>}</td>
