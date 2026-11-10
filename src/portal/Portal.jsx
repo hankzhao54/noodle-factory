@@ -36,6 +36,7 @@ export default function Portal() {
         <div className="portal-brand"><img src="/icon.svg" alt="" width="28" height="28" /><span>{data?.me?.name || t('appName')}{data?.rules?.my_location && data.rules.locations?.[0] ? ` · ${data.rules.locations[0].name}` : ''}</span></div>
         <div className="portal-tools"><LangSwitch /><button className="btn-link" onClick={signOut}>{t('signOut')}</button></div>
       </header>
+      <CustomerSwitch />
       <InstallHint />
       {needTerms && <TermsBanner first={!profile.terms_version} onDone={reloadProfile} />}
       <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')]]} />
@@ -203,5 +204,34 @@ function History({ internal, orders, catalog, reload, onAgain }) {
         )
       })}
     </ul>
+  )
+}
+
+// accounts linked to several customers (e.g. own restaurant + an external customer): pick who you order for.
+// Switching changes prices, order history and delivery rules to that customer's.
+function CustomerSwitch() {
+  const t = useT()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const { data } = useData(() => q(db.rpc('my_customers')))
+  if (!data || data.length < 2) return null
+  const cur = data.find(c => c.current)
+  async function pick(id) {
+    if (id === cur?.id) return
+    setBusy(true)
+    try { await q(db.rpc('switch_customer', { p_customer: id })); window.location.reload() }
+    catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
+  return (
+    <div className="customer-switch" role="group" aria-label={t('orderingFor')}>
+      <span className="field-label">{t('orderingFor')}</span>
+      <div className="date-chips">
+        {data.map(c => (
+          <button key={c.id} type="button" disabled={busy} aria-pressed={c.current} className={c.current ? 'chip on' : 'chip'} onClick={() => pick(c.id)}>
+            {c.name}{c.store ? ` · ${c.store}` : ''}{c.type === 'internal' ? ` (${t('internal')})` : ''}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

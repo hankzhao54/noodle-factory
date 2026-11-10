@@ -508,3 +508,11 @@ textarea { resize: vertical; }
 .store-form { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 10px; background: var(--paper, #fff); }
 .store-select { margin-top: 4px; display: block; max-width: 100%; }
 .row-gap.wrap { flex-wrap: wrap; }
+.customer-switch { margin: 4px 0 14px; }
+.customer-switch .date-chips { margin-top: 4px; }
+.linked-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.link-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.85rem; background: var(--panel); }
+.link-chip.current { border-color: var(--ink); font-weight: 600; }
+.link-chip .btn-link { padding: 0 6px; text-decoration: none; font-size: 1rem; }
+.link-add { max-width: 220px; }
+.is-missing-text { color: var(--short); font-size: 0.85rem; }

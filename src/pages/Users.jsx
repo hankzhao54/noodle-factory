@@ -28,19 +28,23 @@ export default function Users() {
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
-    const [users, customers, locs, stores] = await Promise.all([
+    const [users, customers, locs, stores, links] = await Promise.all([
       q(db.rpc('list_users')),
       q(db.from('customers').select('id,name,type').eq('active', true).order('name')),
       q(db.from('profiles').select('user_id,location_id')),
       q(db.from('customer_locations').select('id,customer_id,name').eq('active', true).order('sort').order('name')),
+      q(db.from('profile_customers').select('user_id,customer_id')),
     ])
     const locOf = Object.fromEntries(locs.map(x => [x.user_id, x.location_id]))
-    return { users: users.map(u => ({ ...u, location_id: locOf[u.user_id] || null })), customers, stores }
+    return { users: users.map(u => ({ ...u, location_id: locOf[u.user_id] || null,
+      links: links.filter(l => l.user_id === u.user_id).map(l => l.customer_id) })), customers, stores }
   })
   async function update(u, patch) {
     const next = { role: u.role, customer_id: u.customer_id, location_id: u.location_id, ...patch }
     const linked = data.customers.find(c => c.id === next.customer_id)
-    if (!LINKED.includes(next.role) || (linked && linked.type !== TYPE_FOR[next.role])) next.customer_id = null
+    if (!LINKED.includes(next.role)) next.customer_id = null
+    // an ordering account's role follows the customer it currently orders for
+    else if (linked) next.role = linked.type === 'internal' ? 'restaurant' : 'customer'
     if (!data.stores.some(l => l.id === next.location_id && l.customer_id === next.customer_id)) next.location_id = null
     try { await q(db.from('profiles').update(next).eq('user_id', u.user_id)); toast(t('saved')); reload() }
     catch (e) { toast(errText(e), 'error') }
@@ -67,13 +71,19 @@ export default function Users() {
                 </select>
               </td>
               <td>
-                {LINKED.includes(u.role) ? (
-                  <select value={u.customer_id || ''} onChange={e => update(u, { customer_id: e.target.value || null })}
-                    aria-label={t('linkCustomer')} className={!u.customer_id ? 'is-missing' : ''}>
-                    <option value="">–</option>
-                    {data.customers.filter(c => c.type === TYPE_FOR[u.role]).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                ) : <span className="muted">–</span>}
+                {LINKED.includes(u.role) ? <LinkedCustomers u={u} customers={data.customers}
+                  onAdd={async id => {
+                    if (!u.customer_id) return update(u, { customer_id: id })
+                    try { await q(db.from('profile_customers').insert({ user_id: u.user_id, customer_id: id })); toast(t('saved')); reload() }
+                    catch (e) { toast(errText(e), 'error') }
+                  }}
+                  onRemove={async id => {
+                    try {
+                      await q(db.from('profile_customers').delete().match({ user_id: u.user_id, customer_id: id }))
+                      if (id === u.customer_id) await update(u, { customer_id: u.links.find(x => x !== id) || null, location_id: null })
+                      else { toast(t('saved')); reload() }
+                    } catch (e) { toast(errText(e), 'error') }
+                  }} /> : <span className="muted">–</span>}
                 {LINKED.includes(u.role) && data.stores.some(l => l.customer_id === u.customer_id) && (
                   <select className="store-select" value={u.location_id || ''} onChange={e => update(u, { location_id: e.target.value || null })}
                     aria-label={t('storeAccess')}>
@@ -186,5 +196,30 @@ function RemoveAccount({ user, onClose, onDone }) {
           {other.length > 0 ? t('removeAccess') : t('deleteAccount')}</button>
       </div>
     </Modal>
+  )
+}
+
+// customers an ordering account can order for; the first one linked is where they start
+function LinkedCustomers({ u, customers, onAdd, onRemove }) {
+  const t = useT()
+  const name = id => customers.find(c => c.id === id)
+  const free = customers.filter(c => !u.links.includes(c.id))
+  return (
+    <div className="linked-list">
+      {u.links.length === 0 && <span className="is-missing-text">{t('noCustomerLinked')}</span>}
+      {u.links.map(id => {
+        const c = name(id)
+        return (
+          <span key={id} className={`link-chip ${id === u.customer_id ? 'current' : ''}`} title={id === u.customer_id ? t('currentCustomer') : ''}>
+            {c?.name || '?'}{c?.type === 'internal' && <span className="muted"> ({t('internal')})</span>}
+            <button type="button" className="btn-link" aria-label={`${t('delete')} ${c?.name || ''}`} onClick={() => onRemove(id)}>×</button>
+          </span>
+        )
+      })}
+      {free.length > 0 && <select value="" onChange={e => e.target.value && onAdd(e.target.value)} aria-label={t('addCustomerLink')} className="link-add">
+        <option value="">+ {t('addCustomerLink')}</option>
+        {free.map(c => <option key={c.id} value={c.id}>{c.name}{c.type === 'internal' ? ` (${t('internal')})` : ''}</option>)}
+      </select>}
+    </div>
   )
 }
