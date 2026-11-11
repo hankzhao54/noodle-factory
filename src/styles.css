@@ -366,25 +366,43 @@ textarea { resize: vertical; }
   .label-print { display: block; }
   .label-print .label { page-break-after: always; break-after: page; }
   .label-print .label:last-child { page-break-after: auto; break-after: auto; }
-  @page { size: A4; margin: 14mm; }
+  /* no page margin, so the browser prints no page title / URL in the corners; the note pads itself */
+  @page { size: A4; margin: 0; }
   body { background: #fff; }
   body > #root { display: none; }
   .print-only { display: block; }
-  .dnote { page-break-after: always; font-size: 11pt; color: #000; font-family: var(--font); }
-  .dnote:last-child { page-break-after: auto; }
-  .dnote header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; }
-  .dnote h1 { font-size: 20pt; margin: 0; }
-  .dnote-meta { text-align: right; }
-  .dnote-to { margin-bottom: 14px; line-height: 1.45; }
-  .dnote-label { font-size: 9pt; color: #555; margin-bottom: 2px; }
-  .dnote table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
-  .dnote th { text-align: left; font-size: 9pt; color: #555; border-bottom: 1px solid #000; padding: 5px 4px; }
-  .dnote td { border-bottom: 1px solid #bbb; padding: 7px 4px; }
-  .dnote .r { text-align: right; }
-  .dnote tfoot td { font-weight: 700; border-top: 2px solid #000; border-bottom: 0; }
-  .dnote-notes { border: 1px solid #999; padding: 6px 8px; margin-bottom: 12px; }
+  .dnote { page-break-after: always; break-after: page; padding: 14mm 15mm; font-size: 10.5pt; line-height: 1.4; color: #000;
+          font-family: var(--font); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .dnote:last-child { page-break-after: auto; break-after: auto; }
+  .dnote p { margin: 0; }
+  .dnote-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm;
+                border-bottom: 2px solid #000; padding-bottom: 5mm; margin-bottom: 6mm; }
+  .dnote-from { font-size: 9.5pt; color: #222; }
+  .dnote-company { font-size: 13pt; font-weight: 800; color: #000; margin-bottom: 1mm !important; }
+  .dnote-title { text-align: right; white-space: nowrap; }
+  .dnote-title h1 { font-size: 18pt; font-weight: 800; margin: 0 0 1mm; letter-spacing: .01em; }
+  .dnote-no { font-size: 15pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dnote-run { font-size: 9pt; color: #444; }
+  .dnote-to { border: 1px solid #000; border-radius: 1.5mm; padding: 3mm 4mm; margin-bottom: 7mm; width: 60%; box-sizing: border-box; }
+  .dnote-label { font-size: 8pt; text-transform: uppercase; letter-spacing: .06em; color: #555; margin-bottom: 1mm !important; }
+  .dnote-cust { font-size: 12pt; font-weight: 700; }
+  .dnote-lines { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 8mm; }
+  .dnote-c-no { width: 9mm; }
+  .dnote-c-qty { width: 34mm; }
+  .dnote-lines th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .05em; color: #444;
+                    border-bottom: 1.5px solid #000; padding: 2mm; font-weight: 600; }
+  .dnote-lines td { border-bottom: 1px solid #bbb; padding: 3mm 2mm; vertical-align: top; }
+  .dnote-lines .r { text-align: right; }
+  .dnote-i { color: #666; font-variant-numeric: tabular-nums; }
+  .dnote-prod { font-weight: 700; font-size: 11pt; }
+  .dnote-code { color: #666; font-size: 9pt; }
+  .dnote-qty { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .dnote-qty b { font-size: 14pt; font-weight: 800; }
+  .dnote-qty span { font-size: 10pt; color: #333; }
+  .dnote-lines tfoot td { border-top: 2px solid #000; border-bottom: 0; font-weight: 700; padding-top: 2.5mm; }
+  .dnote-notes { border: 1px solid #999; padding: 2.5mm 3mm; margin-bottom: 6mm !important; }
   .dnote-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 24mm; margin-top: 22mm; }
-  .dnote-sign div { border-top: 1px solid #000; padding-top: 4px; font-size: 9pt; }
+  .dnote-sign div { border-top: 1px solid #000; padding-top: 1.5mm; font-size: 9pt; }
 }
 
 /* photos */
@@ -487,7 +505,7 @@ textarea { resize: vertical; }
 .prod-info dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 6px 0; color: var(--ink-2); }
 .prod-info dt { color: var(--ink-3); }
 .prod-info dd { margin: 0; }
-.dnote-ingr { font-size: 8.5pt; margin: 2px 0 0; color: #333; font-weight: 400; }
+.dnote-ingr { font-size: 8.5pt; margin: 1mm 0 0; color: #333; font-weight: 400; }
 .closed-list summary { cursor: pointer; color: var(--ink-2); width: fit-content; }
 .closed-list ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); columns: 2; column-gap: 32px; }
 @media (max-width: 640px) { .closed-list ul { columns: 1; } }

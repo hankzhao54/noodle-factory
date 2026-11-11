@@ -509,12 +509,13 @@ function RunForm({ date, run, onClose, onDone }) {
 
 /* ---------------- printable delivery note ---------------- */
 // ingredients + allergens per product, always in Hungarian (food information for the buyer)
+// under each product: allergens and storage (no ingredient list)
 function ingrLine(pi) {
-  if (!pi?.ingredients?.length) return null
-  return <p className="dnote-ingr"><span>Összetevők: </span>{pi.ingredients.map((x, i) => (
-    <span key={i}>{i ? ', ' : ''}{x.allergen ? <b>{x.hu}</b> : x.hu}</span>))}
-    {pi.allergens?.length > 0 && <> · <span>Allergének: </span><b>{pi.allergens.map(a => allergenName(a, 'hu')).join(', ')}</b></>}
-    {pi.storage && <> · <span>Tárolás: </span>{pi.storage}</>}</p>
+  const parts = []
+  if (pi?.allergens?.length) parts.push(<span key="a"><span>Allergének: </span><b>{pi.allergens.map(a => allergenName(a, 'hu')).join(', ')}</b></span>)
+  if (pi?.storage) parts.push(<span key="s"><span>Tárolás: </span>{pi.storage}</span>)
+  if (!parts.length) return null
+  return <p className="dnote-ingr">{parts.map((x, i) => <span key={i}>{i ? ' · ' : ''}{x}</span>)}</p>
 }
 
 function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
@@ -522,39 +523,53 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
   // prices are never shown on the delivery note (they belong on the invoice)
   const delivered = o.status === 'delivered'
   const qtyOf = l => Number(delivered && l.delivered_qty != null ? l.delivered_qty : l.qty)
+  // total per unit (kg, darab …)
+  const totals = {}
+  o.order_lines.forEach(l => { const u = prod(l.product_id).unit || ''; totals[u] = (totals[u] || 0) + qtyOf(l) })
+  const contact = [info?.company_phone, info?.company_email].filter(Boolean).join(' · ')
   return (
     <article className="dnote">
-      <header>
-        <div>
-          <h1>{t('deliveryNote')}</h1>
-          <p><b>{info?.company_name || t('appName')}</b></p>
+      <header className="dnote-head">
+        <div className="dnote-from">
+          <p className="dnote-company">{info?.company_name || t('appName')}</p>
           {info?.company_address && <p>{info.company_address}</p>}
-          {info?.company_tax_no && <p>{t('vatNo')}: {info.company_tax_no}</p>}
+          {(info?.company_tax_no || info?.company_reg_no) && <p>
+            {info?.company_tax_no && <>{t('vatNo')}: {info.company_tax_no}</>}
+            {info?.company_tax_no && info?.company_reg_no && ' · '}
+            {info?.company_reg_no && <>Cg.: {info.company_reg_no}</>}
+          </p>}
+          {contact && <p>{contact}</p>}
         </div>
-        <div className="dnote-meta">
-          <p><b>#{o.no}</b></p>
+        <div className="dnote-title">
+          <h1>{t('deliveryNote')}</h1>
+          <p className="dnote-no">#{o.no}</p>
           <p>{fmtDate(o.delivery_date, t.lang)}</p>
-          {run && <p>D{run.no} {run.driver || ''} {run.vehicle || ''}</p>}
+          {run && <p className="dnote-run">D{run.no}{run.driver ? ` · ${run.driver}` : ''}{run.vehicle ? ` · ${run.vehicle}` : ''}</p>}
         </div>
       </header>
       <section className="dnote-to">
         <p className="dnote-label">{t('customer')}</p>
-        <p><b>{c.name}</b></p>
+        <p className="dnote-cust">{c.name}</p>
         {c.address && <p>{c.address}</p>}
         {(c.contact_person || c.phone) && <p>{[c.contact_person, c.phone].filter(Boolean).join(' · ')}</p>}
         {c.vat_no && <p>{t('vatNo')}: {c.vat_no}</p>}
       </section>
-      <table>
-        <thead><tr><th>{t('name')}</th><th className="r">{t('qty')}</th></tr></thead>
-        <tbody>{o.order_lines.map(l => {
+      <table className="dnote-lines">
+        <colgroup><col className="dnote-c-no" /><col /><col className="dnote-c-qty" /></colgroup>
+        <thead><tr><th>#</th><th>{t('name')}</th><th className="r">{t('qty')}</th></tr></thead>
+        <tbody>{o.order_lines.map((l, i) => {
           const p = prod(l.product_id)
           return (
             <tr key={l.id}>
-              <td>{t.pick(p)}{p.code ? ` (${p.code})` : ''}{ingrLine(pinfo?.[l.product_id])}</td>
-              <td className="r">{fmtNum(qtyOf(l), t.lang)} {p.unit}</td>
+              <td className="dnote-i">{i + 1}</td>
+              <td><span className="dnote-prod">{t.pick(p)}</span>{p.code && <span className="dnote-code"> {p.code}</span>}{ingrLine(pinfo?.[l.product_id])}</td>
+              <td className="dnote-qty"><b>{fmtNum(qtyOf(l), t.lang)}</b> <span>{p.unit}</span></td>
             </tr>
           )
         })}</tbody>
+        <tfoot><tr><td /><td className="r">{t('total')}</td>
+          <td className="dnote-qty">{Object.entries(totals).map(([u, v]) => <div key={u}><b>{fmtNum(v, t.lang)}</b> <span>{u}</span></div>)}</td>
+        </tr></tfoot>
       </table>
       {(c.delivery_notes || o.notes) && <p className="dnote-notes">{[c.delivery_notes, o.notes].filter(Boolean).join(' · ')}</p>}
       <div className="dnote-sign">
