@@ -17,6 +17,8 @@ export default function Deliveries() {
   const [date, setDate] = useState(todayISO())
   const [modal, setModal] = useState(null)      // {kind, ...}
   const [printList, setPrintList] = useState(null)
+  // company details for the notes: load them now, not when printing starts (they would arrive too late)
+  const info = usePublicInfo()
   const { data, loading, error, reload } = useData(async () => {
     const [runs, orders, customers, products, stock, pinfo] = await Promise.all([
       q(db.from('deliveries').select('*').eq('delivery_date', date).order('created_at')),
@@ -100,7 +102,7 @@ export default function Deliveries() {
 
       {printList && createPortal(
         <div className="print-only">
-          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={shipTo(o)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} />)}
+          {printList.map(o => <DeliveryNote key={o.id} order={o} customer={shipTo(o)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} info={info} />)}
         </div>, document.body)}
     </div>
   )
@@ -515,9 +517,8 @@ function ingrLine(pi) {
     {pi.storage && <> · <span>Tárolás: </span>{pi.storage}</>}</p>
 }
 
-function DeliveryNote({ order: o, customer: c, prod, run, pinfo }) {
+function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
   const t = useT()
-  const info = usePublicInfo()
   // prices are never shown on the delivery note (they belong on the invoice)
   const delivered = o.status === 'delivered'
   const qtyOf = l => Number(delivered && l.delivered_qty != null ? l.delivered_qty : l.qty)
