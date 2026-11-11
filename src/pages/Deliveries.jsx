@@ -55,7 +55,11 @@ export default function Deliveries() {
     ...data.runs.map(r => ({ run: r, orders: data.orders.filter(o => o.delivery_id === r.id) })),
   ].filter(g => g.run || g.orders.length)
   const done = data.orders.filter(o => o.status === 'delivered').length
-  const ctx = { data, cust, shipTo, prod, reload, setModal, print: list => setPrintList(list) }
+  const ctx = { data, cust, shipTo, prod, reload, setModal, print: list => {
+    // own restaurants get no delivery note (they confirm receipt in the app)
+    const notes = list.filter(o => cust(o.customer_id)?.type !== 'internal')
+    if (notes.length) setPrintList(notes); else toast(t('noNoteInternal'))
+  } }
 
   async function assign(order, runId) {
     try { await q(db.from('orders').update({ delivery_id: runId || null }).eq('id', order.id)); reload() }
@@ -74,7 +78,7 @@ export default function Deliveries() {
         <p className="day-summary">
           <b>{fmtDate(date, t.lang)}</b>
           <span>{t('deliveredOf', { a: done, b: data.orders.length })}</span>
-          <button className="btn btn-sm" onClick={() => setPrintList(data.orders)}>{t('printAll')}</button>
+          <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAll')}</button>
         </p>
       )}
 
@@ -209,7 +213,9 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
           </select>
         )}
         <span className="grow" />
-        <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>
+        {internal
+          ? !delivered && <span className="muted small">{t('confirmInApp')}</span>
+          : <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
     </article>

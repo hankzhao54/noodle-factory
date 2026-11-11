@@ -23,7 +23,7 @@ export default function Portal() {
     const [me, catalog, orders, rules, pinfo, editInfo] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
-      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
       q(db.rpc('my_order_edit_info')).catch(() => ({})),
@@ -40,6 +40,7 @@ export default function Portal() {
       <CustomerSwitch />
       <InstallHint />
       {needTerms && <TermsBanner first={!profile.terms_version} onDone={reloadProfile} />}
+      {isRestaurant && data?.orders && <ToReceive orders={data.orders} catalog={data.catalog} reload={reload} />}
       <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')]]} />
       <ErrorBox error={error} />
       {!data ? <Loading /> : !profile?.customer_id || !data.me ? (
@@ -239,6 +240,7 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
                       : <button className="btn btn-sm btn-danger-quiet" onClick={() => setAsk('order:' + o.id)}>{t('cancelOrder')}</button>)}
                   </>}
                 </div>
+                {o.status === 'delivered' && o.delivered_at && <p className="muted small">✓ {t('receivedAt')} {fmtDateTime(o.delivered_at, t.lang)}{o.received_by ? ` · ${o.received_by}` : ''}</p>}
                 {internal && o.status === 'confirmed' && !info && o.delivery_date >= todayISO() && <p className="muted small">{t('cantChangeNow')}</p>}
               </div>
             )}
@@ -248,6 +250,39 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
     </ul>
   )
 }
+
+// own restaurants: orders due today (or earlier) that have not been marked delivered — one tap when they arrive
+function ToReceive({ orders, catalog, reload }) {
+  const t = useT()
+  const toast = useToast()
+  const [busy, setBusy] = useState(null)
+  const today = todayISO()
+  const due = orders.filter(o => ['submitted', 'confirmed', 'ready'].includes(o.status) && o.delivery_date <= today)
+  if (!due.length) return null
+  const prod = id => catalog.find(p => p.id === id) || {}
+  async function confirm(o) {
+    setBusy(o.id)
+    try { await q(db.rpc('confirm_my_receipt', { p_order: o.id })); toast(t('receiptConfirmed')); reload() }
+    catch (e) { toast(errText(e), 'error') }
+    finally { setBusy(null) }
+  }
+  return (
+    <section className="to-receive" aria-label={t('toReceive')}>
+      <h2>{t('toReceive')}</h2>
+      {due.map(o => (
+        <div key={o.id} className="to-receive-card">
+          <div className="to-receive-text">
+            <b>#{o.no} · {fmtDate(o.delivery_date, t.lang)}{o.store ? ` · ${o.store.name}` : ''}</b>
+            <span className="muted small">{o.order_lines.map(l => `${t.pick(prod(l.product_id)) || '–'} ${fmtNum(l.qty, t.lang)} ${prod(l.product_id).unit || ''}`).join(' · ')}</span>
+          </div>
+          <button className="btn btn-primary" disabled={busy === o.id} onClick={() => confirm(o)}>✓ {t('confirmReceipt')}</button>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+const fmtDateTime = (d, lang) => new Date(d).toLocaleString({ zh: 'zh-CN', en: 'en-GB', hu: 'hu-HU' }[lang], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 // accounts linked to several customers (e.g. own restaurant + an external customer): pick who you order for.
 // Switching changes prices, order history and delivery rules to that customer's.

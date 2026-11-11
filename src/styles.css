@@ -405,6 +405,14 @@ textarea { resize: vertical; }
   .dnote-sign div { border-top: 1px solid #000; padding-top: 1.5mm; font-size: 9pt; }
 }
 
+/* portal: own restaurants confirm receipt */
+.to-receive { margin: 0 0 16px; padding: 12px 14px; border: 1.5px solid var(--kansui); border-radius: var(--r-md, 10px); background: var(--kansui-soft); display: flex; flex-direction: column; gap: 10px; }
+.to-receive h2 { margin: 0; font-size: 1rem; }
+.to-receive-card { display: flex; align-items: center; gap: 12px; justify-content: space-between; background: var(--panel, #fff); border-radius: var(--r-sm); padding: 10px 12px; }
+.to-receive-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.to-receive-card .btn { flex: none; min-height: 44px; }
+@media (max-width: 480px) { .to-receive-card { flex-direction: column; align-items: stretch; } }
+
 /* photos */
 .thumb { display: block; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--line-2); flex: none; }
 .thumb-empty { display: block; border-radius: var(--r-sm); background: repeating-linear-gradient(135deg, var(--line-2) 0 6px, #F6F7F5 6px 12px); flex: none; }
