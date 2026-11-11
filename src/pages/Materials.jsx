@@ -20,7 +20,9 @@ export default function Materials() {
         { key: 'name', label: t('name'), render: r => <b>{t.pick(r)}</b> },
         { key: 'category', label: t('category'), render: r => t.cat(r.category) || '–' },
         { key: 'unit', label: t('unit') },
-        { key: 'cost_per_unit', label: t('costPerUnit'), num: true, render: r => fmtFt(r.cost_per_unit, t.lang) },
+        { key: 'cost_per_unit', label: t('costPerUnit'), num: true, render: r => <>{fmtFt(r.cost_per_unit, t.lang)} <span className="muted">/ {r.unit}</span></> },
+        { key: 'pack_size', label: t('packPrice'), num: true, render: r => Number(r.pack_size) > 0
+          ? <>{fmtFt(Math.round(r.cost_per_unit * r.pack_size), t.lang)} <span className="muted">/ {fmtNum(r.pack_size, t.lang)} {r.unit}</span></> : <span className="muted">–</span> },
         { key: 'min_stock', label: t('minStock'), num: true, render: r => fmtNum(r.min_stock, t.lang) },
         { key: 'sup', label: t('defaultSupplier'), render: r => supName(r.default_supplier_id) },
       ]}
@@ -31,7 +33,8 @@ export default function Materials() {
         { key: 'name_hu', label: t('name_hu') },
         { key: 'category', label: t('category'), list: 'material-categories', hint: t('categoryHint'), display: t.cat },
         { key: 'unit', label: t('unit'), type: 'select', required: true, options: UNITS.map(u => [u, u]) },
-        { key: 'cost_per_unit', label: t('costPerUnit'), type: 'number' },
+        { key: 'pack_size', label: t('packSizeField'), type: 'number', hint: t('packSizeHint') },
+        { key: 'cost_per_unit', label: t('costPerUnit'), type: 'number', hint: t('costPerUnitHint') },
         { key: 'min_stock', label: t('minStock'), type: 'number' },
         { key: 'default_supplier_id', label: t('defaultSupplier'), type: 'select', options: (suppliers || []).map(s => [s.id, s.name]) },
         { key: 'allergens', label: t('allergens'), type: 'tags', hint: t('allergensHint') },

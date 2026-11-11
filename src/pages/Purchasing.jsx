@@ -15,7 +15,7 @@ export default function Purchasing() {
     const [pos, suppliers, materials, low] = await Promise.all([
       q(db.from('purchase_orders').select('*, purchase_order_lines(qty, unit_price)').order('created_at', { ascending: false }).limit(200)),
       q(db.from('suppliers').select('id,name').eq('active', true).order('name')),
-      q(db.from('materials').select('id,name_zh,name_en,name_hu,unit,cost_per_unit,default_supplier_id').eq('active', true).order('name_zh')),
+      q(db.from('materials').select('id,name_zh,name_en,name_hu,unit,cost_per_unit,pack_size,default_supplier_id').eq('active', true).order('name_zh')),
       q(db.from('material_stock').select('*').eq('below_min', true)),
     ])
     return { pos, suppliers, materials, low }
@@ -26,13 +26,18 @@ export default function Purchasing() {
   const supName = id => data.suppliers.find(s => s.id === id)?.name || '–'
   const pos = data.pos.filter(p => filter === 'all' || (filter === 'open' ? ['draft', 'ordered'].includes(p.status) : p.status === filter))
 
+  const packSizeOf = Object.fromEntries((data?.materials || []).map(m => [m.id, m.pack_size]))
   // create a draft PO for one supplier, pre-filled with every low item from that supplier
   async function draftFromLow(supplierId) {
     try {
       const po = await q(db.from('purchase_orders').insert({ supplier_id: supplierId }).select().single())
       const lines = data.low.filter(m => m.default_supplier_id === supplierId).map(m => ({
         po_id: po.id, material_id: m.id, unit_price: m.cost_per_unit,
-        qty: Math.max(Number(m.min_stock) * 2 - Number(m.on_hand), 1),
+        qty: (() => {      // round up to whole bags when the material comes in bags
+          const need = Math.max(Number(m.min_stock) * 2 - Number(m.on_hand), 1)
+          const pack = Number(packSizeOf[m.id]) || 0
+          return pack ? Math.ceil(need / pack) * pack : need
+        })(),
       }))
       if (lines.length) await q(db.from('purchase_order_lines').insert(lines))
       await reload(); setOpen(po)
@@ -94,6 +99,10 @@ export default function Purchasing() {
     </div>
   )
 }
+
+// quantities are stored in the material's unit (kg); materials with a pack size are entered in bags
+const packOf = m => Number(m?.pack_size) > 0 ? Number(m.pack_size) : null
+const r3 = x => Math.round(x * 1000) / 1000
 
 function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
   const t = useT()
@@ -166,7 +175,7 @@ function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
 
       <div className="table-wrap"><table className="table compact">
         <thead><tr>
-          <th>{t('nav_materials')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th>
+          <th>{t('nav_materials')}</th><th className="num">{t('qtyBags')}</th><th className="num">{t('priceBag')}</th>
           {(receiving || po.status === 'received') && <><th className="num">{t('received')}</th><th>{t('lot')}</th><th>{t('expiry')}</th></>}
           <th className="num">{t('total')}</th>{editable && !receiving && <th />}
         </tr></thead>
@@ -174,21 +183,22 @@ function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
           <tr key={i}>
             <td>{editable && !l.id ? (
               <select value={l.material_id || ''} onChange={e => {
-                const m = mat(e.target.value); setLine(i, { material_id: e.target.value, unit_price: m.cost_per_unit })
+                const m = mat(e.target.value)
+                setLine(i, { material_id: e.target.value, unit_price: m.cost_per_unit, qty: l.qty ?? (packOf(m) || null) })
               }} aria-label={t('nav_materials')}>
                 <option value="">–</option>
-                {data.materials.map(m => <option key={m.id} value={m.id}>{t.pick(m)} ({m.unit})</option>)}
+                {data.materials.map(m => <option key={m.id} value={m.id}>{t.pick(m)}{packOf(m) ? ` · ${fmtNum(packOf(m), t.lang)} ${m.unit}/${t('bag')}` : ` (${m.unit})`}</option>)}
               </select>
-            ) : <>{t.pick(mat(l.material_id))} <span className="muted">{mat(l.material_id).unit}</span></>}</td>
-            <td className="num">{editable ? <NumInput className="input-sm" value={l.qty} onChange={x => setLine(i, { qty: x })} aria-label={t('qty')} /> : fmtNum(l.qty, t.lang)}</td>
-            <td className="num">{editable ? <NumInput className="input-sm" value={l.unit_price} onChange={x => setLine(i, { unit_price: x })} aria-label={t('price')} /> : fmtFt(l.unit_price, t.lang)}</td>
+            ) : <>{t.pick(mat(l.material_id))} <span className="muted">{packOf(mat(l.material_id)) ? `${fmtNum(packOf(mat(l.material_id)), t.lang)} ${mat(l.material_id).unit}/${t('bag')}` : mat(l.material_id).unit}</span></>}</td>
+            <QtyCell m={mat(l.material_id)} value={l.qty} editable={editable} onChange={x => setLine(i, { qty: x })} label={t('qty')} />
+            <PriceCell m={mat(l.material_id)} value={l.unit_price} editable={editable} onChange={x => setLine(i, { unit_price: x })} />
             {receiving && <>
-              <td className="num"><NumInput className="input-sm" value={l.received_qty} onChange={x => setLine(i, { received_qty: x })} aria-label={t('received')} /></td>
+              <QtyCell m={mat(l.material_id)} value={l.received_qty} editable onChange={x => setLine(i, { received_qty: x })} label={t('received')} />
               <td><input className="input-sm" value={l.lot_no} onChange={e => setLine(i, { lot_no: e.target.value })} aria-label={t('lot')} /></td>
               <td><input type="date" className="input-sm" value={l.expiry_date} onChange={e => setLine(i, { expiry_date: e.target.value })} aria-label={t('expiry')} /></td>
             </>}
             {po.status === 'received' && <>
-              <td className="num">{fmtNum(l.received_qty, t.lang)}</td><td>{l.lot_no || '–'}</td><td>{fmtDate(l.expiry_date, t.lang)}</td>
+              <QtyCell m={mat(l.material_id)} value={l.received_qty} /><td>{l.lot_no || '–'}</td><td>{fmtDate(l.expiry_date, t.lang)}</td>
             </>}
             <td className="num">{fmtFt((l.qty || 0) * (l.unit_price || 0), t.lang)}</td>
             {editable && !receiving && <td className="act"><button className="btn-icon" aria-label={t('delete')} onClick={() => setLines(L.filter((_, j) => j !== i))}>×</button></td>}
@@ -210,5 +220,43 @@ function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
         {receiving && <button className="btn btn-primary" disabled={busy} onClick={receive}>{t('receive')}</button>}
       </div>
     </Modal>
+  )
+}
+
+// quantity in bags when the material has a pack size (stored in kg), with the kg shown underneath
+function QtyCell({ m, value, editable, onChange, label }) {
+  const t = useT()
+  const pack = packOf(m)
+  const unit = m?.unit || ''
+  if (!pack) return (
+    <td className="num">{editable ? <NumInput className="input-sm" value={value} onChange={onChange} aria-label={label} /> : fmtNum(value, t.lang)} <span className="unit">{unit}</span></td>
+  )
+  const bags = value == null ? null : r3(Number(value) / pack)
+  return (
+    <td className="num">
+      {editable
+        ? <NumInput className="input-sm" value={bags} min={0} onChange={x => onChange(x == null ? null : r3(x * pack))} aria-label={`${label} (${t('bag')})`} />
+        : fmtNum(bags, t.lang)} <span className="unit">{t('bag')}</span>
+      {value != null && <div className="muted small">= {fmtNum(value, t.lang)} {unit}</div>}
+    </td>
+  )
+}
+
+// price per bag when the material has a pack size (stored per kg)
+function PriceCell({ m, value, editable, onChange }) {
+  const t = useT()
+  const pack = packOf(m)
+  if (!pack) return (
+    <td className="num">{editable ? <NumInput className="input-sm" value={value} onChange={onChange} aria-label={t('price')} /> : fmtFt(value, t.lang)}
+      <div className="muted small">/ {m?.unit || ''}</div></td>
+  )
+  const perBag = value == null ? null : Math.round(Number(value) * pack)
+  return (
+    <td className="num">
+      {editable
+        ? <NumInput className="input-sm" value={perBag} min={0} onChange={x => onChange(x == null ? null : Math.round(x / pack * 100) / 100)} aria-label={`${t('price')} / ${t('bag')}`} />
+        : fmtFt(perBag, t.lang)}
+      <div className="muted small">/ {t('bag')} · {fmtFt(value, t.lang)}/{m.unit}</div>
+    </td>
   )
 }

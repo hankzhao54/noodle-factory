@@ -42,13 +42,19 @@ export default function ReceiveLabels({ poId, onClose }) {
   const { data, error } = useData(async () => {
     const po = await q(db.from('purchase_orders').select('id,no,received_at,order_date,supplier_id').eq('id', poId).single())
     const [lines, supplier] = await Promise.all([
-      q(db.from('purchase_order_lines').select('id,qty,received_qty,lot_no,expiry_date, materials(name_zh,name_en,name_hu,unit)').eq('po_id', poId)),
+      q(db.from('purchase_order_lines').select('id,qty,received_qty,lot_no,expiry_date, materials(name_zh,name_en,name_hu,unit,pack_size)').eq('po_id', poId)),
       po.supplier_id ? q(db.from('suppliers').select('name').eq('id', po.supplier_id).maybeSingle()) : Promise.resolve(null),
     ])
     return { po, lines: lines.filter(l => Number(l.received_qty ?? l.qty) > 0), supplier }
   }, [poId])
   useEffect(() => {
-    if (data && !rows) setRows(data.lines.map(l => ({ id: l.id, on: true, copies: 1, per: null })))
+    // one label per bag when the material has a pack size (e.g. 120 kg of 40 kg bags → 3 labels of 40 kg)
+    if (data && !rows) setRows(data.lines.map(l => {
+      const pack = Number(l.materials?.pack_size) || 0
+      const total = Number(l.received_qty ?? l.qty)
+      const bags = pack ? Math.ceil(total / pack - 1e-9) : 1
+      return { id: l.id, on: true, copies: Math.min(Math.max(bags, 1), 50), per: pack && bags > 1 ? pack : null }
+    }))
   }, [data, rows])
 
   const size = LABEL_SIZES.find(s => s.id === opt.size) || LABEL_SIZES[0]
