@@ -280,7 +280,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const simple = opt.template === 'simple'
   const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h,
                   simple, recorder, amount, unit, showQr: !!opt.showQr,
-                  showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false }
+                  showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false, showNutrition: !!opt.showNutrition }
   const idFor = i => copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
   const scale = Math.min(1.8, 300 / w)
 
@@ -314,6 +314,8 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
             <label className="check-inline"><input type="checkbox" checked={opt.showStorage !== false} onChange={e => set({ showStorage: e.target.checked })} />{t('showStorage')}
               {!data.product.storage && <span className="tag tag-low">{t('missing')}</span>}</label>
             <label className="check-inline"><input type="checkbox" checked={opt.showProducer !== false} onChange={e => set({ showProducer: e.target.checked })} />{t('showProducer')}</label>
+            <label className="check-inline"><input type="checkbox" checked={!!opt.showNutrition} onChange={e => set({ showNutrition: e.target.checked })} />{t('showNutrition')}
+              {data.product.nut_kj == null && <span className="tag tag-low">{t('missing')}</span>}</label>
             <Field label={t('recorder')}><input value={recorder} onChange={e => setRecorder(e.target.value)} /></Field>
             <p className="muted small">
               {t('useByFrom', { n: shelfDays(data.product, settings) ?? '–' })}{' '}
@@ -420,6 +422,24 @@ function simpleLines({ product, batch, expiry, settings, lang, recorder, amount,
   ].filter(Boolean)
 }
 
+// nutrition declaration per 100 g (EU 1169/2011 order); null when the product has no values
+const NUT_T = {
+  hu: { head: 'Tápérték / 100 g', energy: 'Energia', fat: 'Zsír', sat: '– ebből telített zsírsavak', carbs: 'Szénhidrát', sugars: '– ebből cukrok', protein: 'Fehérje', salt: 'Só' },
+  en: { head: 'Nutrition / 100 g', energy: 'Energy', fat: 'Fat', sat: '– of which saturates', carbs: 'Carbohydrate', sugars: '– of which sugars', protein: 'Protein', salt: 'Salt' },
+  zh: { head: '营养成分 / 100 g', energy: '能量', fat: '脂肪', sat: '– 饱和脂肪', carbs: '碳水化合物', sugars: '– 糖', protein: '蛋白质', salt: '盐' },
+}
+export function nutritionRows(product, lang) {
+  if (!product || product.nut_kj == null) return null
+  const N = NUT_T[lang] || NUT_T.hu
+  const g = v => `${Number(v).toLocaleString(lang === 'hu' ? 'hu-HU' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`
+  return [
+    [N.energy, `${Math.round(product.nut_kj)} kJ`], ['', `${Math.round(product.nut_kcal)} kcal`],
+    [N.fat, g(product.nut_fat)], [N.sat, g(product.nut_saturates)],
+    [N.carbs, g(product.nut_carbs)], [N.sugars, g(product.nut_sugars)],
+    [N.protein, g(product.nut_protein)], [N.salt, g(product.nut_salt)],
+  ].map(([k, v]) => ({ k, v }))
+}
+
 export function drawSimpleLabel(props) {
   const { w, h, lot } = props
   const W = Math.round(w * PX_PER_MM), H = Math.round(h * PX_PER_MM)
@@ -444,20 +464,89 @@ export function drawSimpleLabel(props) {
     x0 = qx + qrPx + gap
   }
 
-  // text: the biggest size at which every line fits (condensed face, like the OkoHACCP font)
-  const maxW = W - x0 - pad, maxH = H - 2 * pad
+  // text: the biggest size at which every line fits (condensed face, like the OkoHACCP font).
+  // Long lines (storage, address) may wrap onto a second line rather than shrink everything.
   // textLines: [{ text, bold }] given directly (e.g. goods-in labels); otherwise the product label lines
   const lines = props.textLines || simpleLines(props)
+  // optional nutrition block on the right, separated by a thin rule
+  const nut = !props.textLines && props.showNutrition ? nutritionRows(props.product, props.lang) : null
+  const nutHead = nut ? (NUT_T[props.lang] || NUT_T.hu).head : ''
+  const total = W - x0 - pad, maxH = H - 2 * pad
+  const ruleGap = nut ? gap : 0
   const fontOf = (l, px) => `condensed ${l.bold ? 700 : 500} ${l.bold ? px * 1.05 : px}px ${FONT}`
-  let pt = 24, px, lh
-  for (; pt >= 4.5; pt = Math.round((pt - 0.2) * 10) / 10) {
-    px = pt * DPI / 72; lh = px * 1.16
-    const widest = Math.max(...lines.map(l => { g.font = fontOf(l, px); return g.measureText(l.text).width }))
-    if (widest <= maxW && lines.length * lh <= maxH) break
+  const wrap = (text, font, width) => {
+    g.font = font
+    if (g.measureText(text).width <= width) return [text]
+    const words = text.split(' '), out = []
+    let cur = ''
+    for (const w of words) {
+      const next = cur ? cur + ' ' + w : w
+      if (cur && g.measureText(next).width > width) { out.push(cur); cur = w } else cur = next
+    }
+    if (cur) out.push(cur)
+    return out.some(l => g.measureText(l).width > width) ? null : out
   }
+  // lay out at a size: null if it does not fit
+  const layout = (px, mainW, nutW) => {
+    const lh = px * 1.16
+    const main = []
+    for (const l of lines) {
+      // the name and the dates never wrap
+      const parts = /^\d|:\s*\d/.test(l.text) || l.bold ? (g.font = fontOf(l, px), g.measureText(l.text).width <= mainW ? [l.text] : null)
+                                                           : wrap(l.text, fontOf(l, px), mainW)
+      if (!parts) return null
+      parts.forEach(t => main.push({ ...l, text: t }))
+    }
+    if (main.length * lh > maxH) return null
+    const rows = []
+    if (nut) {
+      g.font = `condensed 700 ${px}px ${FONT}`
+      if (g.measureText(nutHead).width > nutW) return null
+      const f = `condensed 500 ${px}px ${FONT}`
+      for (const r of nut) {
+        g.font = f
+        const vw = g.measureText(r.v).width
+        const ks = r.k ? wrap(r.k, f, nutW - vw - px * 0.5) : ['']
+        if (!ks) return null
+        ks.forEach((k, i) => rows.push({ k, v: i === ks.length - 1 ? r.v : '' }))
+      }
+      if ((rows.length + 1) * lh > maxH) return null
+    }
+    return { px, lh, main, rows }
+  }
+  const fitAt = (mainW, nutW) => {
+    for (let p = 24; p >= 4.5; p = Math.round((p - 0.2) * 10) / 10) {
+      const r = layout(p * DPI / 72, mainW, nutW)
+      if (r) return r
+    }
+    return layout(4.5 * DPI / 72, mainW, nutW) || { px: 4.5 * DPI / 72, lh: 4.5 * DPI / 72 * 1.16, main: lines, rows: nut || [] }
+  }
+  let L0, mainW = total, nutW = 0
+  if (nut) {
+    // split the width between the two blocks so the text can be as big as possible
+    for (let f = 0.30; f <= 0.601; f += 0.02) {
+      const nw = total * f, mw = total - nw - ruleGap * 2
+      const r = fitAt(mw, nw)
+      if (!L0 || r.px > L0.px) { L0 = r; mainW = mw; nutW = nw }
+    }
+  } else L0 = fitAt(mainW, 0)
+  const { px, lh, main, rows } = L0
   g.textBaseline = 'middle'
-  let y = (H - lines.length * lh) / 2 + lh / 2
-  for (const l of lines) { g.font = fontOf(l, px); g.fillText(l.text, x0, y); y += lh }
+  let y = (H - main.length * lh) / 2 + lh / 2
+  for (const l of main) { g.font = fontOf(l, px); g.fillText(l.text, x0, y); y += lh }
+  if (nut) {
+    const nx = x0 + mainW + ruleGap * 2, rx = W - pad
+    g.fillRect(Math.round(x0 + mainW + ruleGap), Math.round(pad), Math.max(1, Math.round(PX_PER_MM * 0.15)), Math.round(maxH))
+    let ny = (H - (rows.length + 1) * lh) / 2 + lh / 2
+    g.font = `condensed 700 ${px}px ${FONT}`; g.textAlign = 'left'; g.fillText(nutHead, nx, ny); ny += lh
+    g.font = `condensed 500 ${px}px ${FONT}`
+    for (const r of rows) {
+      g.textAlign = 'left'; g.fillText(r.k, nx, ny)
+      if (r.v) { g.textAlign = 'right'; g.fillText(r.v, rx, ny) }
+      ny += lh
+    }
+    g.textAlign = 'left'
+  }
   return c
 }
 
@@ -465,7 +554,7 @@ function CanvasPreview(props) {
   const [src, setSrc] = useState('')
   const [fontTick, setFontTick] = useState(0)
   useEffect(() => { labelFontsReady().then(() => setFontTick(x => x + 1)) }, [])
-  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, props.showStorage, props.showProducer, props.settings?.label_producer, props.settings?.label_address, fontTick])
+  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, props.showStorage, props.showProducer, props.showNutrition, props.settings?.label_producer, props.settings?.label_address, fontTick])
   useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
   return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
 }
