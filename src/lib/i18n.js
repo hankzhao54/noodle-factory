@@ -565,6 +565,7 @@ const D = {
   receivedAt: ['已收货', 'Received', 'Átvéve'],
   noNoteInternal: ['自家餐厅不打送货单，由餐厅在 app 里确认收货', 'No delivery note for own restaurants — they confirm receipt in the app', 'Saját étteremnek nincs szállítólevél — az appban igazolják az átvételt'],
   confirmInApp: ['餐厅在 app 里确认收货', 'Restaurant confirms in the app', 'Az étterem az appban igazolja'],
+  paperShared: ['所有标签（生产、分装、进货）共用这个尺寸，打出来一样高', 'All labels (batch, pack, goods-in) use this size, so they come out the same height', 'Minden címke (gyártás, csomag, áruátvétel) ezt a méretet használja, így egyforma magasak'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

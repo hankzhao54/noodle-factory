@@ -4,7 +4,7 @@ import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtNum } from '../lib/i18n'
 import { Modal, Field, Loading, NumInput, useToast, errText } from './ui'
-import { LABEL_SIZES, drawSimpleLabel, labelFontsReady, fmtLabelQty } from './LabelPrint'
+import { LABEL_SIZES, drawSimpleLabel, labelFontsReady, fmtLabelQty, readPaper, writePaper } from './LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 
 // label wording in the label's own language
@@ -31,8 +31,8 @@ export default function ReceiveLabels({ poId, onClose }) {
   const t = useT()
   const toast = useToast()
   const { profile } = useAuth()
-  const [opt, setOpt] = useState(() => read({ size: 'dk22205', length: 40, lang: 'hu', cw: 62, ch: 40, opened: true, supplier: true }))
-  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write(n); return n })
+  const [opt, setOpt] = useState(() => ({ ...read({ lang: 'hu', opened: true, supplier: true }), ...readPaper() }))
+  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write(n); writePaper(n); return n })
   const [recorder, setRecorder] = useState(profile?.display_name || '')
   const [rows, setRows] = useState(null)        // [{ id, on, copies, per }]
   const [fontTick, setFontTick] = useState(0)
@@ -135,7 +135,7 @@ export default function ReceiveLabels({ poId, onClose }) {
                 {LABEL_SIZES.map(s => <option key={s.id} value={s.id}>{s.custom ? t('customSize') : s.name}</option>)}
               </select>
             </Field>
-            {size.cont && <Field label={t('labelLength')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
+            {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
             {size.custom && <>
               <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
               <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>

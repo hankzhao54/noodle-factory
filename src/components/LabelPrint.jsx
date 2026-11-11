@@ -80,6 +80,21 @@ const ymdhm = d => {
 const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } }
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* ignore */ } }
 
+// One paper setting for every label (batch labels, pack labels, goods-in labels), so all labels
+// come out the same height and the printer's paper never has to be changed between jobs.
+const PAPER_KEY = 'nf-label-paper'
+const PAPER_FIELDS = ['size', 'length', 'cw', 'ch']
+export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5 }
+export function readPaper() {
+  const p = { ...PAPER_DEFAULT, ...read(PAPER_KEY, {}) }
+  return Object.fromEntries(PAPER_FIELDS.map(k => [k, p[k]]))
+}
+export function writePaper(opt) {
+  const cur = readPaper()
+  const next = Object.fromEntries(PAPER_FIELDS.map(k => [k, k in opt ? opt[k] : cur[k]]))
+  write(PAPER_KEY, next)
+}
+
 export function traceUrl(lot) {
   return `${window.location.origin}/trace/${encodeURIComponent(lot)}`
 }
@@ -94,7 +109,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
     const saved = read('nf-label-v3', {})
     if (Number(saved.length) === 32) saved.length = 31.5       // old default
     return { size: 'dk22205', length: 31.5, lang: 'hu', ingredients: true, cw: 62, ch: 31.5, template: 'simple', showQr: false,
-             showStorage: true, showProducer: true, ...saved }
+             showStorage: true, showProducer: true, ...saved, ...readPaper() }
   })
   const [recorder, setRecorder] = useState(profile?.display_name || '')
   const [amount, setAmount] = useState(null)
@@ -107,7 +122,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const renderBox = useRef(null)
   const [qr, setQr] = useState('')
   const [settings, setSettings] = useState(null)
-  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v3', n); return n })
+  const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v3', n); writePaper(n); return n })
 
   const { data, error } = useData(async () => {
     const now = new Date()
@@ -284,7 +299,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
               {LABEL_SIZES.map(s => <option key={s.id} value={s.id}>{s.custom ? t('customSize') : s.name}</option>)}
             </select>
           </Field>
-          {size.cont && <Field label={t('labelLength')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
+          {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
           {size.custom && <div className="row-gap">
             <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
             <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>
