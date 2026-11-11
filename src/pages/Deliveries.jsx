@@ -518,10 +518,9 @@ function ingrLine(pi) {
 function DeliveryNote({ order: o, customer: c, prod, run, pinfo }) {
   const t = useT()
   const info = usePublicInfo()
-  const internal = c.type === 'internal'
+  // prices are never shown on the delivery note (they belong on the invoice)
   const delivered = o.status === 'delivered'
   const qtyOf = l => Number(delivered && l.delivered_qty != null ? l.delivered_qty : l.qty)
-  const total = o.order_lines.reduce((s, l) => s + qtyOf(l) * Number(l.unit_price || 0), 0)
   return (
     <article className="dnote">
       <header>
@@ -545,18 +544,16 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo }) {
         {c.vat_no && <p>{t('vatNo')}: {c.vat_no}</p>}
       </section>
       <table>
-        <thead><tr><th>{t('name')}</th><th className="r">{t('qty')}</th>{!internal && <><th className="r">{t('price')} ({t('netPrice')})</th><th className="r">{t('total')} ({t('netPrice')})</th></>}</tr></thead>
+        <thead><tr><th>{t('name')}</th><th className="r">{t('qty')}</th></tr></thead>
         <tbody>{o.order_lines.map(l => {
           const p = prod(l.product_id)
           return (
             <tr key={l.id}>
               <td>{t.pick(p)}{p.code ? ` (${p.code})` : ''}{ingrLine(pinfo?.[l.product_id])}</td>
               <td className="r">{fmtNum(qtyOf(l), t.lang)} {p.unit}</td>
-              {!internal && <><td className="r">{fmtFt(l.unit_price, t.lang)}</td><td className="r">{fmtFt(qtyOf(l) * l.unit_price, t.lang)}</td></>}
             </tr>
           )
         })}</tbody>
-        {!internal && <tfoot><tr><td colSpan={3}>{t('total')} ({t('netPrice')})</td><td className="r">{fmtFt(total, t.lang)}</td></tr></tfoot>}
       </table>
       {(c.delivery_notes || o.notes) && <p className="dnote-notes">{[c.delivery_notes, o.notes].filter(Boolean).join(' · ')}</p>}
       <div className="dnote-sign">
