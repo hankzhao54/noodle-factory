@@ -5,7 +5,8 @@ import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate, fmtFt, translate, pickName } from '../lib/i18n'
 import { compressImage } from '../lib/image'
 import { usePublicInfo } from '../lib/publicInfo'
-import { allergenName } from '../components/LabelPrint'
+import { allergenName, drawSimpleLabel, labelFontsReady, readPaper, LABEL_SIZES } from '../components/LabelPrint'
+import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 import { Modal, Field, Loading, ErrorBox, PageHead, Status, NumInput, useToast, errText } from '../components/ui'
 
 export const PROOF_BUCKET = 'noodle-delivery-proofs'
@@ -55,9 +56,25 @@ export default function Deliveries() {
     ...data.runs.map(r => ({ run: r, orders: data.orders.filter(o => o.delivery_id === r.id) })),
   ].filter(g => g.run || g.orders.length)
   const done = data.orders.filter(o => o.status === 'delivered').length
-  const ctx = { data, cust, shipTo, prod, reload, setModal, print: list => {
-    // own restaurants get no delivery note (they confirm receipt in the app)
-    const notes = list.filter(o => cust(o.customer_id)?.type !== 'internal')
+  // shipping label (label printer, same paper as all other labels): one per order
+  async function printShipLabels(list) {
+    if (!list.length) return
+    try {
+      await labelFontsReady()
+      const paper = readPaper()
+      const size = LABEL_SIZES.find(x => x.id === paper.size) || LABEL_SIZES[0]
+      const w = size.custom ? (paper.cw || 62) : size.w
+      const h = size.custom ? (paper.ch || 31.5) : size.cont ? (paper.length || 31.5) : size.h
+      const cs = list.map(o => drawSimpleLabel({ w, h, margin: paper.margin, textLines: shipLabelLines(o, shipTo(o), prod, run(o.delivery_id)) }))
+      const name = list.length === 1 ? `ship-${list[0].no}` : `ship-${date}`
+      if (isTouch()) await shareCanvases(cs, name)
+      else await deliverPdf(pdfFromCanvases(cs, w, h), name)
+    } catch (e) { if (e?.name !== 'AbortError') toast(errText(e), 'error') }
+  }
+  const isInternal = o => cust(o.customer_id)?.type === 'internal'
+  const ctx = { data, cust, shipTo, prod, reload, setModal, printLabels: printShipLabels, print: list => {
+    // own restaurants get no delivery note (they confirm receipt in the app; a label is enough)
+    const notes = list.filter(o => !isInternal(o))
     if (notes.length) setPrintList(notes); else toast(t('noNoteInternal'))
   } }
 
@@ -78,7 +95,8 @@ export default function Deliveries() {
         <p className="day-summary">
           <b>{fmtDate(date, t.lang)}</b>
           <span>{t('deliveredOf', { a: done, b: data.orders.length })}</span>
-          <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAll')}</button>
+          {data.orders.some(o => !isInternal(o)) && <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAllNotes')}</button>}
+          {data.orders.some(isInternal) && <button className="btn btn-sm" onClick={() => printShipLabels(data.orders.filter(isInternal))}>{t('printInternalLabels')}</button>}
         </p>
       )}
 
@@ -136,7 +154,8 @@ function RunHeader({ run, orders, ctx }) {
       <Status value={run.status} prefix="d" />
       <span className="grow" />
       <button className="btn btn-sm btn-quiet" onClick={() => ctx.setModal({ kind: 'run', run })}>{t('edit')}</button>
-      {orders.length > 0 && <button className="btn btn-sm" onClick={() => ctx.print(orders)}>{t('printAll')}</button>}
+      {orders.some(o => ctx.cust(o.customer_id)?.type !== 'internal') && <button className="btn btn-sm" onClick={() => ctx.print(orders)}>{t('printAllNotes')}</button>}
+      {orders.some(o => ctx.cust(o.customer_id)?.type === 'internal') && <button className="btn btn-sm" onClick={() => ctx.printLabels(orders.filter(o => ctx.cust(o.customer_id)?.type === 'internal'))}>{t('printInternalLabels')}</button>}
       {run.status === 'planned' && open > 0 &&
         <button className="btn btn-sm" onClick={() => act(db.from('deliveries').update({ status: 'out' }).eq('id', run.id))}>{t('depart')}</button>}
       {Object.keys(load).length > 0 && (
@@ -213,9 +232,9 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
           </select>
         )}
         <span className="grow" />
-        {internal
-          ? !delivered && <span className="muted small">{t('confirmInApp')}</span>
-          : <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
+        {internal && !delivered && <span className="muted small">{t('confirmInApp')}</span>}
+        <button className="btn btn-sm" onClick={() => ctx.printLabels([o])}>{t('printShipLabel')}</button>
+        {!internal && <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
     </article>
@@ -522,6 +541,25 @@ function ingrLine(pi) {
   if (pi?.storage) parts.push(<span key="s"><span>Tárolás: </span>{pi.storage}</span>)
   if (!parts.length) return null
   return <p className="dnote-ingr">{parts.map((x, i) => <span key={i}>{i ? ' · ' : ''}{x}</span>)}</p>
+}
+
+// shipping label text (Hungarian, like the notes): who, which order / day / run, what
+function shipLabelLines(o, c, prod, run) {
+  const qtyOf = l => Number(o.status === 'delivered' && l.delivered_qty != null ? l.delivered_qty : l.qty)
+  const num = v => Number(v).toLocaleString('hu-HU', { maximumFractionDigits: 2 })
+  const d = new Date(o.delivery_date + 'T00:00:00').toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit', weekday: 'short' })
+  const lines = [
+    { text: c.name || '–', bold: true },
+    { text: [`#${o.no}`, d, run ? `D${run.no}` : null].filter(Boolean).join(' · ') },
+  ]
+  const totals = {}
+  o.order_lines.forEach(l => {
+    const p = prod(l.product_id)
+    lines.push({ text: `${p.name_hu || '–'}: ${num(qtyOf(l))} ${p.unit || ''}`, bold: true })
+    totals[p.unit || ''] = (totals[p.unit || ''] || 0) + qtyOf(l)
+  })
+  if (o.order_lines.length > 1) lines.push({ text: 'Összesen: ' + Object.entries(totals).map(([u, v]) => `${num(v)} ${u}`).join(' + ') })
+  return lines
 }
 
 // delivery notes are always printed in Hungarian, whatever language the app is in
