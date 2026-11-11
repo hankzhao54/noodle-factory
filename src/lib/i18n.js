@@ -577,6 +577,8 @@ const D = {
   nutFibre: ['膳食纤维 g', 'Fibre g', 'Rost g'],
   nutProtein: ['蛋白质 g', 'Protein g', 'Fehérje g'],
   nutSalt: ['盐 g', 'Salt g', 'Só g'],
+  labelMargin: ['四周留白（mm）', 'Blank border (mm)', 'Margó (mm)'],
+  labelMarginHint: ['打出来边上被切掉就调大，所有标签共用', 'Increase if text is cut off at the edges; shared by all labels', 'Növelje, ha a szél levágódik; minden címkére érvényes'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

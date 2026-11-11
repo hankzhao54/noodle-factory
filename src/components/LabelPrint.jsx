@@ -83,8 +83,9 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } cat
 // One paper setting for every label (batch labels, pack labels, goods-in labels), so all labels
 // come out the same height and the printer's paper never has to be changed between jobs.
 const PAPER_KEY = 'nf-label-paper'
-const PAPER_FIELDS = ['size', 'length', 'cw', 'ch']
-export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5 }
+const PAPER_FIELDS = ['size', 'length', 'cw', 'ch', 'margin']
+// margin: blank border kept clear of text, because the printer cannot print right up to the edge
+export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5, margin: 3 }
 export function readPaper() {
   const p = { ...PAPER_DEFAULT, ...read(PAPER_KEY, {}) }
   return Object.fromEntries(PAPER_FIELDS.map(k => [k, p[k]]))
@@ -279,7 +280,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
 
   const simple = opt.template === 'simple'
   const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h,
-                  simple, recorder, amount, unit, showQr: !!opt.showQr,
+                  simple, recorder, amount, unit, showQr: !!opt.showQr, margin: opt.margin,
                   showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false, showNutrition: !!opt.showNutrition }
   const idFor = i => copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
   const scale = Math.min(1.8, 300 / w)
@@ -300,6 +301,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
             </select>
           </Field>
           {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
+          <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0.5} max={8} onChange={v => set({ margin: v })} /></Field>
           {size.custom && <div className="row-gap">
             <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
             <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>
@@ -448,7 +450,8 @@ export function drawSimpleLabel(props) {
   const g = c.getContext('2d')
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H)
   g.fillStyle = '#000'
-  const pad = 1.0 * PX_PER_MM, gap = 1.4 * PX_PER_MM
+  const m = Number(props.margin ?? PAPER_DEFAULT.margin)
+  const pad = Math.max(0.5, Math.min(8, isNaN(m) ? 3 : m)) * PX_PER_MM, gap = 1.4 * PX_PER_MM
 
   // QR (optional): whole-pixel modules so it stays sharp on a 300 dpi head
   let x0 = Math.round(pad)
@@ -554,7 +557,7 @@ function CanvasPreview(props) {
   const [src, setSrc] = useState('')
   const [fontTick, setFontTick] = useState(0)
   useEffect(() => { labelFontsReady().then(() => setFontTick(x => x + 1)) }, [])
-  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, props.showStorage, props.showProducer, props.showNutrition, props.settings?.label_producer, props.settings?.label_address, fontTick])
+  const key = JSON.stringify([props.w, props.h, props.lot, props.lang, props.recorder, props.amount, props.unit, props.labelId, props.showQr, props.showStorage, props.showProducer, props.showNutrition, props.margin, props.settings?.label_producer, props.settings?.label_address, fontTick])
   useEffect(() => { setSrc(drawSimpleLabel(props).toDataURL('image/png')) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
   return <img src={src} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
 }

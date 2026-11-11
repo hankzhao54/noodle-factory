@@ -82,14 +82,14 @@ export default function ReceiveLabels({ poId, onClose }) {
     [data, rows])
   const count = picked.reduce((s, x) => s + Math.min(x.r.copies, 50), 0)
   const first = picked[0]
-  const preview = useMemo(() => first ? drawSimpleLabel({ w, h, textLines: textFor(first.l, first.r) }).toDataURL('image/png') : '',
+  const preview = useMemo(() => first ? drawSimpleLabel({ w, h, margin: opt.margin, textLines: textFor(first.l, first.r) }).toDataURL('image/png') : '',
     [first, w, h, opt, recorder, fontTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function canvases() {
     const out = []
     picked.forEach(({ l, r }) => {
       const lines = textFor(l, r)
-      for (let i = 0; i < Math.min(r.copies, 50); i++) out.push(drawSimpleLabel({ w, h, textLines: lines }))
+      for (let i = 0; i < Math.min(r.copies, 50); i++) out.push(drawSimpleLabel({ w, h, margin: opt.margin, textLines: lines }))
     })
     return out
   }
@@ -136,6 +136,7 @@ export default function ReceiveLabels({ poId, onClose }) {
               </select>
             </Field>
             {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
+            <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0.5} max={8} onChange={v => set({ margin: v })} /></Field>
             {size.custom && <>
               <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
               <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>
