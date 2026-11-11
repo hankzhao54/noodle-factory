@@ -9,6 +9,9 @@ export default function Materials() {
   const t = useT()
   const { data: suppliers } = useData(() => q(db.from('suppliers').select('id,name').eq('active', true).order('name')))
   const supName = id => suppliers?.find(s => s.id === id)?.name || '–'
+  // for "counts as the stock of": materials that keep their own stock
+  const { data: mats } = useData(() => q(db.from('materials').select('id,name_zh,name_en,name_hu,stock_as').eq('active', true).order('name_zh')))
+  const matName = id => { const m = mats?.find(x => x.id === id); return m ? t.pick(m) : '' }
   return (
     <>
     <datalist id="material-categories">{categoryOptions(t.lang).map(c => <option key={c} value={c} />)}</datalist>
@@ -17,7 +20,7 @@ export default function Materials() {
       defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true, track_stock: true }}
       columns={[
         { key: 'code', label: t('code') },
-        { key: 'name', label: t('name'), render: r => <b>{t.pick(r)}</b> },
+        { key: 'name', label: t('name'), render: r => <><b>{t.pick(r)}</b>{r.stock_as && <div className="muted small">→ {t('stockAsShort')} {matName(r.stock_as)}</div>}</> },
         { key: 'category', label: t('category'), render: r => t.cat(r.category) || '–' },
         { key: 'unit', label: t('unit') },
         { key: 'cost_per_unit', label: t('costPerUnit'), num: true, render: r => <>{fmtFt(r.cost_per_unit, t.lang)} <span className="muted">/ {r.unit}</span></> },
@@ -43,6 +46,8 @@ export default function Materials() {
         { key: 'ingredient_zh', label: t('ingredientZh') },
         { key: 'on_label', label: t('onLabel'), type: 'bool' },
         { key: 'track_stock', label: t('trackStock'), type: 'bool', hint: t('trackStockHint') },
+        { key: 'stock_as', label: t('stockAs'), type: 'select', hint: t('stockAsHint'),
+          options: (mats || []).filter(m => !m.stock_as).map(m => [m.id, t.pick(m)]) },
         { key: 'active', label: t('active'), type: 'bool' },
       ]} />
     </>
