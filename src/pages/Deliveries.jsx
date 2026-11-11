@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
-import { useT, fmtNum, fmtDate, fmtFt } from '../lib/i18n'
+import { useT, fmtNum, fmtDate, fmtFt, translate, pickName } from '../lib/i18n'
 import { compressImage } from '../lib/image'
 import { usePublicInfo } from '../lib/publicInfo'
 import { allergenName } from '../components/LabelPrint'
@@ -518,8 +518,12 @@ function ingrLine(pi) {
   return <p className="dnote-ingr">{parts.map((x, i) => <span key={i}>{i ? ' · ' : ''}{x}</span>)}</p>
 }
 
+// delivery notes are always printed in Hungarian, whatever language the app is in
+const huT = Object.assign((k, v) => translate('hu', k, v), { lang: 'hu', pick: row => pickName('hu', row) })
+const huDate = d => new Date(d + 'T00:00:00').toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
+
 function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
-  const t = useT()
+  const t = huT
   // prices are never shown on the delivery note (they belong on the invoice)
   const delivered = o.status === 'delivered'
   const qtyOf = l => Number(delivered && l.delivered_qty != null ? l.delivered_qty : l.qty)
@@ -543,12 +547,12 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
         <div className="dnote-title">
           <h1>{t('deliveryNote')}</h1>
           <p className="dnote-no">#{o.no}</p>
-          <p>{fmtDate(o.delivery_date, t.lang)}</p>
+          <p>{huDate(o.delivery_date)}</p>
           {run && <p className="dnote-run">D{run.no}{run.driver ? ` · ${run.driver}` : ''}{run.vehicle ? ` · ${run.vehicle}` : ''}</p>}
         </div>
       </header>
       <section className="dnote-to">
-        <p className="dnote-label">{t('customer')}</p>
+        <p className="dnote-label">Vevő</p>
         <p className="dnote-cust">{c.name}</p>
         {c.address && <p>{c.address}</p>}
         {(c.contact_person || c.phone) && <p>{[c.contact_person, c.phone].filter(Boolean).join(' · ')}</p>}
@@ -556,7 +560,7 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
       </section>
       <table className="dnote-lines">
         <colgroup><col className="dnote-c-no" /><col /><col className="dnote-c-qty" /></colgroup>
-        <thead><tr><th>#</th><th>{t('name')}</th><th className="r">{t('qty')}</th></tr></thead>
+        <thead><tr><th>#</th><th>Termék</th><th className="r">{t('qty')}</th></tr></thead>
         <tbody>{o.order_lines.map((l, i) => {
           const p = prod(l.product_id)
           return (
