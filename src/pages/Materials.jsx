@@ -14,7 +14,7 @@ export default function Materials() {
     <datalist id="material-categories">{categoryOptions(t.lang).map(c => <option key={c} value={c} />)}</datalist>
     <CrudPage table="materials" title={t('nav_materials')} order="name_zh" imageFolder="materials"
       searchKeys={['name_zh', 'name_en', 'name_hu', 'code', 'category']}
-      defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true }}
+      defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true, track_stock: true }}
       columns={[
         { key: 'code', label: t('code') },
         { key: 'name', label: t('name'), render: r => <b>{t.pick(r)}</b> },
@@ -42,6 +42,7 @@ export default function Materials() {
         { key: 'ingredient_en', label: t('ingredientEn') },
         { key: 'ingredient_zh', label: t('ingredientZh') },
         { key: 'on_label', label: t('onLabel'), type: 'bool' },
+        { key: 'track_stock', label: t('trackStock'), type: 'bool', hint: t('trackStockHint') },
         { key: 'active', label: t('active'), type: 'bool' },
       ]} />
     </>

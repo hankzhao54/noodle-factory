@@ -22,7 +22,7 @@ export default function Production() {
     const [products, recipe, mstock, pstock, demand, batches] = await Promise.all([
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort').eq('active', true).order('sort')),
       q(db.from('recipe_lines').select('*')),
-      q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand')),
+      q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand,track_stock')),
       q(db.from('product_stock').select('id,on_hand')),
       q(db.from('production_demand').select('*').lte('delivery_date', date)),
       q(db.from('production_batches').select('*').order('planned_date', { ascending: false }).order('created_at', { ascending: false }).limit(200)),

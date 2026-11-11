@@ -33,6 +33,7 @@ export function materialNeeds(batchesByProduct, recipe, mstock) {
   })
   return Object.entries(need).map(([id, qty]) => {
     const m = mstock.find(x => x.id === id) || { id }
-    return { m, qty, short: qty - Number(m.on_hand || 0) }
+    // untracked materials (water): never short
+    return { m, qty, short: m.track_stock === false ? 0 : qty - Number(m.on_hand || 0) }
   }).sort((a, b) => b.short - a.short)
 }

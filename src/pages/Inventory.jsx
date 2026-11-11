@@ -47,9 +47,13 @@ export default function Inventory() {
                     onClick={() => setOpenLots(s => ({ ...s, [m.id]: !s[m.id] }))}>{t('lotsN', { n: lots.length })} {isOpen ? '▴' : '▾'}</button>}
                 </td>
                 <td className="muted hide-sm">{t.cat(m.category) || '–'}</td>
+                {m.track_stock === false ? <>
+                  <td className="strand-col muted small">{t('notTracked')}</td><td className="num muted">∞</td><td className="num muted">–</td>
+                </> : <>
                 <td className="strand-col"><Strand value={m.on_hand} min={m.min_stock} unit={m.unit} /></td>
                 <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span></td>
                 <td className="num muted">{fmtNum(m.min_stock, t.lang)}</td>
+                </>}
                 <td>{first ? <ExpiryTag date={first.expiry_date} days={d} /> : <span className="muted">–</span>}</td>
                 <td className="num muted hide-sm">{fmtFt(m.on_hand * m.cost_per_unit, t.lang)}</td>
                 <td className="act"><button className="btn btn-quiet" onClick={() => setAdjusting({ kind: 'material', row: m, lots })}>{t('adjust')}</button></td>

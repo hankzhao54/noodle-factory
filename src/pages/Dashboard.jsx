@@ -25,7 +25,7 @@ export default function Dashboard() {
       isAdmin ? q(db.rpc('list_users')).then(u => u.filter(x => x.role === 'pending')) : Promise.resolve([]),
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort').eq('active', true).order('sort')),
       q(db.from('recipe_lines').select('product_id,material_id,qty_per_batch')),
-      q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand')),
+      q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand,track_stock')),
       q(db.from('product_stock').select('id,on_hand')),
       q(db.from('production_demand').select('*').lte('delivery_date', tomorrow)),
       q(db.from('material_lots').select('*').not('expiry_date', 'is', null).order('expiry_date')),
