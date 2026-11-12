@@ -53,6 +53,7 @@ export default function Orders() {
               <td className="nowrap muted small">{new Date(o.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
               <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
               <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
+                {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>
               <td className="muted small">{o.order_lines.map(l => {
                 const p = data.products.find(x => x.id === l.product_id) || {}
@@ -112,6 +113,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
     <Modal title={`#${order.no} · ${customer?.name || ''}${order.store ? ` · ${order.store.name}` : ''}`} onClose={onClose}>
       <div className="detail-meta">
         <Status value={order.status} prefix="o" />
+        {order.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>

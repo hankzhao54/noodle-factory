@@ -185,6 +185,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <span className="mono-num">#{o.no}</span>
         <h3>{c.name}</h3>
         <span className={`tag tag-${c.type}`}>{t(c.type)}</span>
+        {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
         <span className="grow" />
         <Status value={o.status} prefix="o" />
       </header>

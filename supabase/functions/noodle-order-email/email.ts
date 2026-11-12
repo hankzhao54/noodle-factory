@@ -36,6 +36,7 @@ const T: Record<string, [string, string, string]> = {
   invoice_note: ['Fizetés: számla a kiszállítás után.', 'Payment: invoice after delivery.', '付款：送货后开发票。'],
   reply_note: ['Kérdés esetén válaszoljon erre az e-mailre.', 'If you have any questions, just reply to this email.',
     '如有问题，请直接回复此邮件。'],
+  urgent: ['SÜRGŐS', 'URGENT', '紧急'],
   test_banner: ['TESZT – eredeti címzett: {to}', 'TEST – original recipient: {to}', '测试 – 原收件人：{to}'],
 }
 const IDX: Record<Lang, number> = { hu: 0, en: 1, zh: 2 }
@@ -156,7 +157,7 @@ export function buildEmails(p: any, event: string): Mail[] {
     const lang = asLang(s.email_factory_lang)
     if (to.length) {
       const { html, text } = render(p, lang, 'factory_new', true)
-      out.push({ kind: 'factory_new', to, subject: tr(lang, 'factory_subject', vars(lang)), html, text })
+      out.push({ kind: 'factory_new', to, subject: (o.urgent ? `🚨 ${tr(lang, 'urgent')} – ` : '') + tr(lang, 'factory_subject', vars(lang)), html, text })
     }
   }
 

@@ -14,6 +14,7 @@ const T: Record<string, [string, string, string]> = {
   net: ['nettó', 'net', '不含税'],
   notes: ['Megjegyzés', 'Notes', '备注'],
   open: ['Megnyitás a háttérrendszerben', 'Open in the back office', '在后台打开'],
+  urgent: ['SÜRGŐS', 'URGENT', '紧急'],
   test: ['Teszt: a Slack értesítések működnek ✅', 'Test: Slack notifications are working ✅', '测试：Slack 推送设置成功 ✅'],
 }
 const IDX: Record<Lang, number> = { hu: 0, en: 1, zh: 2 }
@@ -44,10 +45,11 @@ export function buildSlack(p: any, event: string, detail?: string) {
     : event === 'changed'
       ? `:pencil2: *${tr(l, 'changed')} #${o.no}* · ${esc(c.name)}`
       : `:ramen: *${tr(l, 'placed')} #${o.no}* · ${esc(c.name)} (${tr(l, internal ? 'internal' : 'wholesale')})`
+  const urgent = o.urgent && event !== 'cancelled' ? `:rotating_light: *${tr(l, 'urgent')}* ` : ''
   const lines = (p.lines || []).map((x: any) => `• ${esc(name(x))} × ${num(Number(x.qty), l)} ${esc(x.unit)}`)
   const total = (p.lines || []).reduce((t: number, x: any) => t + Number(x.qty) * Number(x.unit_price || 0), 0)
   const parts = [
-    head,
+    urgent + head,
     `${tr(l, 'delivery')}: *${date(o.delivery_date, l)}*` + (event === 'placed' ? ` · ${tr(l, o.status === 'confirmed' ? 'confirmed' : 'submitted')}` : ''),
     event === 'changed' && detail ? esc(detail) : '',
     event === 'placed' || event === 'changed' ? lines.join('\n') : '',

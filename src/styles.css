@@ -405,6 +405,12 @@ textarea { resize: vertical; }
   .dnote-sign div { border-top: 1px solid #000; padding-top: 1.5mm; font-size: 9pt; }
 }
 
+/* urgent orders */
+.chip-urgent { border-color: var(--short); color: var(--short); align-self: flex-start; }
+.chip-urgent.on { background: var(--short); color: #fff; }
+.urgent-note { color: var(--short); margin: 0; }
+.tag-urgent { background: var(--short); color: #fff; }
+
 /* portal: own restaurants confirm receipt */
 .to-receive { margin: 0 0 16px; padding: 12px 14px; border: 1.5px solid var(--kansui); border-radius: var(--r-md, 10px); background: var(--kansui-soft); display: flex; flex-direction: column; gap: 10px; }
 .to-receive h2 { margin: 0; font-size: 1rem; }

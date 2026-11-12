@@ -23,7 +23,7 @@ export default function Portal() {
     const [me, catalog, orders, rules, pinfo, editInfo] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
-      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, urgent, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
       q(db.rpc('my_order_edit_info')).catch(() => ({})),
@@ -101,7 +101,15 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
     if (dateProblem(r, date)) setDate(nextDates(r, 1)[0] || date)
   }
   const needStore = stores.length > 0 && !store
-  const problem = dateProblem(rules, date)
+  // urgent order: any day that is not closed and not too early, also outside the delivery days
+  const [urgent, setUrgent] = useState(false)
+  const rawProblem = dateProblem(rules, date)
+  const problem = urgent && ['no_delivery_day', 'not_your_day'].includes(rawProblem) ? '' : rawProblem
+  function toggleUrgent() {
+    const on = !urgent
+    setUrgent(on)
+    if (!on && dateProblem(rules, date)) setDate(options[0] || date)
+  }
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const total = cartTotal(catalog, qty)
@@ -111,10 +119,10 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
     setBusy(true)
     try {
       await q(db.rpc('place_order', {
-        p_delivery_date: date, p_notes: notes || null, p_location_id: storeId || null,
+        p_delivery_date: date, p_notes: notes || null, p_location_id: storeId || null, p_urgent: urgent,
         p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q })),
       }))
-      toast(t(internal ? 'orderPlacedInternal' : 'orderPlaced')); setNotes(''); onPlaced()
+      toast(t(urgent ? 'urgentPlaced' : internal ? 'orderPlacedInternal' : 'orderPlaced')); setNotes(''); setUrgent(false); onPlaced()
     } catch (e) {
       const m = /delivery date not allowed: (\w+)/.exec(e?.message || '')
       toast(m ? t('dp_' + m[1]) : errText(e), 'error')
@@ -146,7 +154,13 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
         )}
         <label className="field date-other"><span className="muted small">{t('otherDate')}</span>
           <input type="date" min={rules?.earliest || todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
-        {problem && <p className="error-box small">{t('dp_' + problem)}</p>}
+        {rules?.urgent && (
+          <button type="button" className={urgent ? 'chip chip-urgent on' : 'chip chip-urgent'} aria-pressed={urgent} onClick={toggleUrgent}>
+            🚨 {t('urgentOrder')}
+          </button>
+        )}
+        {urgent && <p className="urgent-note small">{t('urgentNote')}</p>}
+        {problem && <p className="error-box small">{t('dp_' + problem)}{rules?.urgent && !urgent && ['no_delivery_day', 'not_your_day'].includes(problem) ? ' ' + t('urgentHint') : ''}</p>}
         {rules && <p className="muted small">{t('rulesNote', { cutoff: rules.cutoff || '–', days })}</p>}
         {(store ? store.address : me.address) && <p className="muted small">{store ? `${store.name} · ${store.address}` : me.address}</p>}
       </div>
@@ -159,7 +173,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
           <b>{internal ? t('itemsN', { n: count }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</b>
           <span className="muted small">{internal ? (count ? t('internalOrderNote') : t('emptyCart')) : <>{count ? t('itemsN', { n: count }) : t('emptyCart')} · {t('noPayment')}</>}</span>
         </div>
-        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked || needStore} onClick={place}>{t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked || needStore} onClick={place}>{urgent ? '🚨 ' + t('placeUrgent') : t('placeOrder')}</button>
       </div>
     </div>
   )
@@ -204,7 +218,7 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
           <li key={o.id} className={open ? 'open' : ''}>
             <button className="history-row" aria-expanded={open} onClick={() => { setOpenId(open ? null : o.id); setEditing(null); setDraft({}) }}>
               <span className="mono-num">#{o.no}</span>
-              <span>{fmtDate(o.delivery_date, t.lang)}{o.store ? <span className="muted"> · {o.store.name}</span> : ''}</span>
+              <span>{o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>} {fmtDate(o.delivery_date, t.lang)}{o.store ? <span className="muted"> · {o.store.name}</span> : ''}</span>
               <Status value={o.status} prefix="o" />
               <span className="num">{internal ? t('itemsN', { n: o.order_lines.length }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</span>
             </button>
