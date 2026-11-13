@@ -82,7 +82,7 @@ Deno.serve(async req => {
           method: 'POST',
           headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: s.email_from || 'rendeles@101bistro.hu', to: m.to,
+            from: s.email_from || 'noodle@101bistro.hu', to: m.to,
             reply_to: s.email_reply_to || undefined,
             subject: m.subject, html: m.html, text: m.text,
           }),
