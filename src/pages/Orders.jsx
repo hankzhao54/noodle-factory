@@ -78,7 +78,8 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
   const [askCancel, setAskCancel] = useState(false)
-  const [mode, setMode] = useState('view')                 // view | edit | split
+  const [mode, setMode] = useState('view')                 // view | edit | split | date
+  const [newDate, setNewDate] = useState(() => order.delivery_date < todayISO() ? todayISO() : order.delivery_date)
   const [edit, setEdit] = useState({})                     // line id → new qty (0 = cancel this product)
   const [pick, setPick] = useState([])                     // line ids to move (split)
   const [splitDate, setSplitDate] = useState(() => { const d = new Date(order.delivery_date + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })
@@ -103,6 +104,13 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
       toast(t('orderSplitDone')); onDone()
     } catch (e) { toast(/keep at least one/.test(e.message || '') ? t('splitKeepOne') : errText(e), 'error'); setBusy(false) }
   }
+  async function doMoveDate() {
+    setBusy(true)
+    try {
+      await q(db.rpc('change_order_date', { p_order: order.id, p_date: newDate }))
+      toast(t('orderDateChanged')); onDone()
+    } catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
   const setStatus = async status => {
     try {
       await q(db.from('orders').update({ status }).eq('id', order.id))
@@ -117,7 +125,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
-      {mode !== 'view' && <p className="note-box small">{t(mode === 'edit' ? 'editOrderHint' : 'splitOrderHint')}</p>}
+      {mode !== 'view' && <p className="note-box small">{t(mode === 'edit' ? 'editOrderHint' : mode === 'date' ? 'changeDateHint' : 'splitOrderHint')}</p>}
       <table className="table compact">
         <thead><tr>{mode === 'split' && <th />}<th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th><th className="num">{t('total')}</th>{mode === 'edit' && <th />}</tr></thead>
         <tbody>{order.order_lines.map(l => {
@@ -155,9 +163,18 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
           <button className="btn" onClick={() => { setMode('view'); setPick([]) }}>{t('cancel')}</button>
           <button className="btn btn-primary" disabled={busy || !pick.length || pick.length === order.order_lines.length || !splitDate} onClick={doSplit}>{t('moveToNewOrder')}</button>
         </div>)}
+      {mode === 'date' && (
+        <div className="modal-foot">
+          <label className="row-gap small">{t('newDeliveryDate')}
+            <input type="date" value={newDate} min={todayISO()} onChange={e => setNewDate(e.target.value)} /></label>
+          <span className="grow" />
+          <button className="btn" onClick={() => setMode('view')}>{t('cancel')}</button>
+          <button className="btn btn-primary" disabled={busy || !newDate || newDate === order.delivery_date} onClick={doMoveDate}>{t('saveChanges')}</button>
+        </div>)}
       {mode === 'view' && changeable && (
         <div className="row-gap" style={{ marginTop: 8 }}>
           <button className="btn btn-sm" onClick={() => setMode('edit')}>{t('editOrder')}</button>
+          <button className="btn btn-sm" onClick={() => setMode('date')}>{t('changeDate')}</button>
           {order.order_lines.length > 1 && <button className="btn btn-sm" onClick={() => setMode('split')}>{t('splitOrder')}</button>}
         </div>)}
       {!readOnly && mode === 'view' && (
