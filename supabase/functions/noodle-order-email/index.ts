@@ -10,11 +10,13 @@ const URL_ = Deno.env.get('SUPABASE_URL')!
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND = Deno.env.get('RESEND_API_KEY')
 const SLACK = Deno.env.get('SLACK_WEBHOOK_URL')   // Incoming Webhook URL of the Slack channel
+// purchase orders for suppliers ordered via Slack go to their own channel (e.g. #central-kitchen-team) when set
+const SLACK_PO = Deno.env.get('SLACK_WEBHOOK_PURCHASE') || SLACK
 
-async function postSlack(msg: { text: string }) {
-  if (!SLACK) return { status: 'failed', detail: 'SLACK_WEBHOOK_URL is not set' }
+async function postSlack(msg: { text: string }, url = SLACK) {
+  if (!url) return { status: 'failed', detail: 'SLACK_WEBHOOK_URL is not set' }
   try {
-    const r = await fetch(SLACK, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...msg, unfurl_links: false }) })
     const body = await r.text()
     return r.ok ? { status: 'sent', detail: body } : { status: 'failed', detail: `${r.status} ${body}` }
@@ -60,7 +62,7 @@ Deno.serve(async req => {
     try { payload = await rpc('po_slack_payload', { p_po: input.po_id, p_secret: secret }) } catch { return json({ error: 'unauthorized or not found' }, 401) }
     if (!payload) return json({ error: 'not found' }, 404)
     if ((payload.settings || {}).slack_mode !== 'on') return json({ ok: true, slack: 'off' })
-    const r = await postSlack(buildPoSlack(payload))
+    const r = await postSlack(buildPoSlack(payload), SLACK_PO)
     try { await rpc('log_email', { p_secret: secret, p_order: null, p_kind: 'slack_po', p_recipient: 'Slack: ' + (payload.supplier?.name || ''),
                                    p_status: r.status, p_detail: r.detail }) } catch { /* ignore */ }
     return json({ ok: true, slack: r.status })
