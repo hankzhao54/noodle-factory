@@ -121,7 +121,9 @@ function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
   const [printAfter, setPrintAfter] = useState(true)
 
   async function persist(status) {
-    const payload = { ...head, expected_date: head.expected_date || null, ...(status ? { status } : {}) }
+    // "ordered" is set only after the lines are saved: a supplier ordered via Slack gets the full list
+    const late = status === 'ordered' && po.status !== 'ordered'
+    const payload = { ...head, expected_date: head.expected_date || null, ...(status && !late ? { status } : {}) }
     const saved = po.id
       ? await q(db.from('purchase_orders').update(payload).eq('id', po.id).select().single())
       : await q(db.from('purchase_orders').insert(payload).select().single())
@@ -132,6 +134,7 @@ function POEditor({ po, data, supName, onClose, onDone, onPrint }) {
     if (keep.length) await q(db.from('purchase_order_lines').insert(keep.map(l => ({
       po_id: saved.id, material_id: l.material_id, qty: l.qty, unit_price: l.unit_price || 0,
     }))))
+    if (late) return await q(db.from('purchase_orders').update({ status }).eq('id', saved.id).select().single())
     return saved
   }
 

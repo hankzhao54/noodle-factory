@@ -4,7 +4,7 @@
 // Secrets: RESEND_API_KEY (emails), SLACK_WEBHOOK_URL (Slack channel), set in Supabase → Edge Functions → Secrets.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 import { buildEmails } from './email.ts'
-import { buildSlack, slackTest } from './slack.ts'
+import { buildSlack, buildPoSlack, slackTest } from './slack.ts'
 
 const URL_ = Deno.env.get('SUPABASE_URL')!
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -42,7 +42,7 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
   const secret = req.headers.get('x-noodle-hook')
   if (!secret) return json({ error: 'unauthorized' }, 401)
-  let input: { order_id?: string; event?: string; detail?: string }
+  let input: { order_id?: string; po_id?: string; event?: string; detail?: string }
   try { input = await req.json() } catch { return json({ error: 'bad json' }, 400) }
 
   // admin "send test" button: no order
@@ -51,6 +51,17 @@ Deno.serve(async req => {
     try { settings = await rpc('notify_settings', { p_secret: secret }) } catch { return json({ error: 'unauthorized' }, 401) }
     const r = await postSlack(slackTest(settings))
     try { await rpc('log_email', { p_secret: secret, p_order: null, p_kind: 'slack', p_recipient: 'Slack',
+                                   p_status: r.status, p_detail: r.detail }) } catch { /* ignore */ }
+    return json({ ok: true, slack: r.status })
+  }
+  // purchase order for a supplier ordered via Slack
+  if (input.event === 'purchase' && input.po_id) {
+    let payload
+    try { payload = await rpc('po_slack_payload', { p_po: input.po_id, p_secret: secret }) } catch { return json({ error: 'unauthorized or not found' }, 401) }
+    if (!payload) return json({ error: 'not found' }, 404)
+    if ((payload.settings || {}).slack_mode !== 'on') return json({ ok: true, slack: 'off' })
+    const r = await postSlack(buildPoSlack(payload))
+    try { await rpc('log_email', { p_secret: secret, p_order: null, p_kind: 'slack_po', p_recipient: 'Slack: ' + (payload.supplier?.name || ''),
                                    p_status: r.status, p_detail: r.detail }) } catch { /* ignore */ }
     return json({ ok: true, slack: r.status })
   }

@@ -15,6 +15,10 @@ const T: Record<string, [string, string, string]> = {
   notes: ['Megjegyzés', 'Notes', '备注'],
   open: ['Megnyitás a háttérrendszerben', 'Open in the back office', '在后台打开'],
   urgent: ['SÜRGŐS', 'URGENT', '紧急'],
+  po: ['Beszerzési rendelés', 'Purchase order', '进货单'],
+  please: ['kérlek rendeld meg:', 'please order:', '请帮忙订购：'],
+  needed: ['Kell ekkorra', 'Needed by', '需要到货'],
+  bags: ['zsák', 'packs', '袋'],
   test: ['Teszt: a Slack értesítések működnek ✅', 'Test: Slack notifications are working ✅', '测试：Slack 推送设置成功 ✅'],
 }
 const IDX: Record<Lang, number> = { hu: 0, en: 1, zh: 2 }
@@ -56,6 +60,28 @@ export function buildSlack(p: any, event: string, detail?: string) {
     event === 'placed' && !internal && total > 0 ? `${tr(l, 'total')}: ${ft(total)} ${tr(l, 'net')}` : '',
     o.notes ? `${tr(l, 'notes')}: ${esc(o.notes)}` : '',
     s.app_url ? `<${String(s.app_url).replace(/\/$/, '')}/orders|${tr(l, 'open')}>` : '',
+  ].filter(Boolean)
+  return { text: parts.join('\n') }
+}
+
+// purchase order for a supplier that is ordered via Slack (e.g. Aida)
+export function buildPoSlack(p: any) {
+  const s = p.settings || {}
+  const l = asLang(s.slack_lang)
+  const po = p.po, sup = p.supplier
+  const name = (x: any) => x[`name_${l}`] || x.name_hu
+  const who = sup.slack_member ? `<@${esc(sup.slack_member)}>` : esc(sup.contact || sup.name)
+  const lines = (p.lines || []).map((x: any) => {
+    const pack = Number(x.pack_size) || 0
+    const packs = pack > 0 ? ` (${num(Number(x.qty) / pack, l)} × ${num(pack, l)} ${esc(x.unit)})` : ''
+    return `• ${esc(name(x))}: *${num(Number(x.qty), l)} ${esc(x.unit)}*${packs}`
+  })
+  const parts = [
+    `:shopping_trolley: *${tr(l, 'po')} P${po.no}* · ${who} ${tr(l, 'please')}`,
+    lines.join('\n'),
+    po.expected_date ? `${tr(l, 'needed')}: *${date(po.expected_date, l)}*` : '',
+    po.notes ? `${tr(l, 'notes')}: ${esc(po.notes)}` : '',
+    s.app_url ? `<${String(s.app_url).replace(/\/$/, '')}/purchasing|${tr(l, 'open')}>` : '',
   ].filter(Boolean)
   return { text: parts.join('\n') }
 }
