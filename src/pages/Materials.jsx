@@ -17,7 +17,7 @@ export default function Materials() {
     <datalist id="material-categories">{categoryOptions(t.lang).map(c => <option key={c} value={c} />)}</datalist>
     <CrudPage table="materials" title={t('nav_materials')} order="name_zh" imageFolder="materials"
       searchKeys={['name_zh', 'name_en', 'name_hu', 'code', 'category']}
-      defaults={{ unit: 'kg', active: true, min_stock: 0, cost_per_unit: 0, on_label: true, track_stock: true }}
+      defaults={{ unit: 'kg', active: true, min_stock: 0, min_mode: 'auto', cost_per_unit: 0, on_label: true, track_stock: true }}
       columns={[
         { key: 'code', label: t('code') },
         { key: 'name', label: t('name'), render: r => <><b>{t.pick(r)}</b>{r.stock_as && <div className="muted small">→ {t('stockAsShort')} {matName(r.stock_as)}</div>}</> },
@@ -26,7 +26,7 @@ export default function Materials() {
         { key: 'cost_per_unit', label: t('costPerUnit'), num: true, render: r => <>{fmtFt(r.cost_per_unit, t.lang)} <span className="muted">/ {r.unit}</span></> },
         { key: 'pack_size', label: t('packPrice'), num: true, render: r => Number(r.pack_size) > 0
           ? <>{fmtFt(Math.round(r.cost_per_unit * r.pack_size), t.lang)} <span className="muted">/ {fmtNum(r.pack_size, t.lang)} {r.unit}</span></> : <span className="muted">–</span> },
-        { key: 'min_stock', label: t('minStock'), num: true, render: r => fmtNum(r.min_stock, t.lang) },
+        { key: 'min_stock', label: t('minStock'), num: true, render: r => r.min_mode === 'manual' ? fmtNum(r.min_stock, t.lang) : <span className="muted">{t('minAutoShort')}</span> },
         { key: 'sup', label: t('defaultSupplier'), render: r => supName(r.default_supplier_id) },
       ]}
       fields={[
@@ -38,7 +38,9 @@ export default function Materials() {
         { key: 'unit', label: t('unit'), type: 'select', required: true, options: UNITS.map(u => [u, u]) },
         { key: 'pack_size', label: t('packSizeField'), type: 'number', hint: t('packSizeHint') },
         { key: 'cost_per_unit', label: t('costPerUnit'), type: 'number', hint: t('costPerUnitHint') },
-        { key: 'min_stock', label: t('minStock'), type: 'number' },
+        { key: 'min_mode', label: t('minMode'), type: 'select', required: true, hint: t('minModeHint'),
+          options: [['auto', t('minAuto')], ['manual', t('minManual')]] },
+        { key: 'min_stock', label: t('minStockManual'), type: 'number' },
         { key: 'default_supplier_id', label: t('defaultSupplier'), type: 'select', options: (suppliers || []).map(s => [s.id, s.name]) },
         { key: 'allergens', label: t('allergens'), type: 'tags', hint: t('allergensHint') },
         { key: 'ingredient_hu', label: t('ingredientHu'), hint: t('ingredientHint') },

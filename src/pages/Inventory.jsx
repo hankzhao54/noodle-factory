@@ -52,7 +52,8 @@ export default function Inventory() {
                 </> : <>
                 <td className="strand-col"><Strand value={m.on_hand} min={m.min_stock} unit={m.unit} /></td>
                 <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span></td>
-                <td className="num muted">{fmtNum(m.min_stock, t.lang)}</td>
+                <td className="num muted" title={m.min_mode === 'auto' ? t('minAutoTitle') : t('minManual')}>{fmtNum(m.min_stock, t.lang)}
+                  {m.min_mode === 'auto' && <div className="small">{t('minAutoShort')}</div>}</td>
                 </>}
                 <td>{first ? <ExpiryTag date={first.expiry_date} days={d} /> : <span className="muted">–</span>}</td>
                 <td className="num muted hide-sm">{fmtFt(m.on_hand * m.cost_per_unit, t.lang)}</td>
