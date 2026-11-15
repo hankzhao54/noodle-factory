@@ -21,7 +21,10 @@ export default function Orders() {
       q(db.from('products').select('id,name_zh,name_en,name_hu,unit,base_price,min_order_qty,pack_size_g,active,sort,image_path').order('sort')),
       q(db.from('customer_locations').select('id,customer_id,name').eq('active', true).order('sort').order('name')),
     ])
-    return { orders, customers, products, stores }
+    // who placed each order (name, or e-mail when no name is set)
+    const ids = [...new Set(orders.map(o => o.created_by).filter(Boolean))]
+    const names = ids.length ? (await q(db.rpc('staff_user_names', { p_ids: ids }))) || {} : {}
+    return { orders, customers, products, stores, names }
   }, [from])
 
   if (loading && !data) return <div className="page"><Loading /></div>
@@ -45,7 +48,7 @@ export default function Orders() {
       ]} />
       {shown.length === 0 ? <Empty /> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>#</th><th>{t('orderedAt')}</th><th>{t('deliveryDate')}</th><th>{t('customer')}</th><th>{t('lines')}</th>
+          <thead><tr><th>#</th><th>{t('orderedAt')}</th><th>{t('deliveryDate')}</th><th>{t('customer')}</th><th>{t('orderedBy')}</th><th>{t('lines')}</th>
             <th className="num">{t('total')}</th><th>{t('status')}</th></tr></thead>
           <tbody>{shown.map(o => (
             <tr key={o.id} className="clickable" onClick={() => setDetail(o)}>
@@ -55,6 +58,7 @@ export default function Orders() {
               <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
                 {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>
+              <td className="muted small">{data.names[o.created_by] || '–'}</td>
               <td className="muted small">{o.order_lines.map(l => {
                 const p = data.products.find(x => x.id === l.product_id) || {}
                 return `${t.pick(p)} ${fmtNum(l.qty, t.lang)}${p.unit || ''}`
@@ -65,7 +69,7 @@ export default function Orders() {
           ))}</tbody>
         </table></div>
       )}
-      {detail && <OrderDetail order={detail} customer={cust(detail.customer_id)} products={data.products}
+      {detail && <OrderDetail order={detail} customer={cust(detail.customer_id)} products={data.products} orderedBy={data.names[detail.created_by]}
         onClose={() => setDetail(null)} onDone={() => { setDetail(null); reload() }} />}
       {creating && <NewOrder customers={data.customers} products={data.products} stores={data.stores}
         onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload() }} />}
@@ -73,7 +77,7 @@ export default function Orders() {
   )
 }
 
-export function OrderDetail({ order, customer, products, onClose, onDone, readOnly }) {
+export function OrderDetail({ order, customer, products, onClose, onDone, readOnly, orderedBy }) {
   const t = useT()
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
@@ -123,6 +127,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         <Status value={order.status} prefix="o" />
         {order.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
+        {orderedBy && <span className="muted">{t('orderedBy')}: {orderedBy}</span>}
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
       {mode !== 'view' && <p className="note-box small">{t(mode === 'edit' ? 'editOrderHint' : mode === 'date' ? 'changeDateHint' : 'splitOrderHint')}</p>}

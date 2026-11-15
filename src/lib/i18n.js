@@ -611,6 +611,7 @@ const D = {
   orderViaEmail: ['邮件', 'E-mail', 'E-mail'],
   slackMember: ['Slack 成员 ID', 'Slack member ID', 'Slack tag-azonosító'],
   slackMemberHint: ['选 Slack 时：进货单点「已下单」就发到 Slack 频道并 @ 这个人。ID 在 Slack 里点他的头像 → 个人资料 → ⋮ →「复制成员 ID」（U 开头）', 'With Slack: marking a purchase order as ordered posts it to the Slack channel and @-mentions this person. Find the ID in Slack: their profile → ⋮ → “Copy member ID” (starts with U)', 'Slack esetén: a „Megrendelve” jelölésre a rendelés a Slack csatornába megy, megemlítve ezt a személyt. Azonosító: profil → ⋮ → „Tagazonosító másolása” (U-val kezdődik)'],
+  orderedBy: ['下单人', 'Ordered by', 'Rendelő'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
