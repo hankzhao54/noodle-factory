@@ -624,6 +624,7 @@ const D = {
   rsIdleHint: ['电脑上这么久没人操作就自动退出登录，防止别人用；退出前 1 分钟会提醒', 'Signs out when nobody uses the back office for this long, so others cannot use it; warns 1 minute before', 'Ennyi tétlenség után kiléptet, hogy más ne használhassa; 1 perccel előtte figyelmeztet'],
   rsIdleMin: ['{m} 分钟没操作', '{m} min idle', '{m} perc tétlenség után'],
   rsIdleNever: ['不自动退出', 'Never', 'Soha'],
+  onOrder: ['已下单', 'on order', 'megrendelve'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

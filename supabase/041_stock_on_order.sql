@@ -1,0 +1,2 @@
+-- 041 · 已下单（未收货）的进货算进去：material_stock.on_order；库存 + 已下单 ≥ 最低库存就不再提示缺货
+-- (view as applied live; see 035 for the rest of the definition)

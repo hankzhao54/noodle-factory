@@ -34,7 +34,7 @@ export default function Purchasing() {
       const lines = data.low.filter(m => m.default_supplier_id === supplierId).map(m => ({
         po_id: po.id, material_id: m.id, unit_price: m.cost_per_unit,
         qty: (() => {      // round up to whole bags when the material comes in bags
-          const need = Math.max(Number(m.min_stock) * 2 - Number(m.on_hand), 1)
+          const need = Math.max(Number(m.min_stock) * 2 - Number(m.on_hand) - Number(m.on_order || 0), 1)   // minus what is already ordered
           const pack = Number(packSizeOf[m.id]) || 0
           return pack ? Math.ceil(need / pack) * pack : need
         })(),
@@ -60,7 +60,7 @@ export default function Purchasing() {
             {Object.entries(lowBySupplier).map(([sid, items]) => (
               <li key={sid}>
                 <span className="low-sup">{sid ? supName(sid) : '–'}</span>
-                <span className="low-items">{items.map(m => `${t.pick(m)} ${fmtNum(m.on_hand, t.lang)}/${fmtNum(m.min_stock, t.lang)} ${m.unit}`).join(' · ')}</span>
+                <span className="low-items">{items.map(m => `${t.pick(m)} ${fmtNum(m.on_hand, t.lang)}/${fmtNum(m.min_stock, t.lang)} ${m.unit}` + (Number(m.on_order) > 0 ? ` (${t('onOrder')} ${fmtNum(m.on_order, t.lang)})` : '')).join(' · ')}</span>
                 {sid && <button className="btn btn-sm" onClick={() => draftFromLow(sid)}>{t('addToPO')}</button>}
               </li>
             ))}

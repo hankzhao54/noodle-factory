@@ -51,7 +51,8 @@ export default function Inventory() {
                   <td className="strand-col muted small">{t('notTracked')}</td><td className="num muted">∞</td><td className="num muted">–</td>
                 </> : <>
                 <td className="strand-col"><Strand value={m.on_hand} min={m.min_stock} unit={m.unit} /></td>
-                <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span></td>
+                <td className="num"><b>{fmtNum(m.on_hand, t.lang)}</b> <span className="unit">{m.unit}</span>
+                  {Number(m.on_order) > 0 && <div className="muted small">+{fmtNum(m.on_order, t.lang)} {t('onOrder')}</div>}</td>
                 <td className="num muted" title={m.min_mode === 'auto' ? t('minAutoTitle') : t('minManual')}>{fmtNum(m.min_stock, t.lang)}
                   {m.min_mode === 'auto' && <div className="small">{t('minAutoShort')}</div>}</td>
                 </>}
