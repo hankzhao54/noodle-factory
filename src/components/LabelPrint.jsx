@@ -494,8 +494,9 @@ export function drawSimpleLabel(props) {
     const lh = px * 1.16
     const main = []
     for (const l of lines) {
-      // the name and the dates never wrap
-      const parts = /^\d|:\s*\d/.test(l.text) || l.bold ? (g.font = fontOf(l, px), g.measureText(l.text).width <= mainW ? [l.text] : null)
+      // the name, IDs, dates and quantities never wrap; storage, producer, address etc. may
+      const keep = l.bold || /\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}|^\S+:\s*[\d#]|ID:|\d\s*(kg|g|db|pcs)\b/.test(l.text)
+      const parts = keep ? (g.font = fontOf(l, px), g.measureText(l.text).width <= mainW ? [l.text] : null)
                                                            : wrap(l.text, fontOf(l, px), mainW)
       if (!parts) return null
       parts.forEach(t => main.push({ ...l, text: t }))
