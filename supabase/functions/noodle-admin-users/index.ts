@@ -4,6 +4,7 @@
 //   create  { email, password, display_name, role, customer_id?, company?, phone? }
 //                                           → { user_id, existed }   (existing login: password unchanged)
 //   delete  { user_id }                      → { mode: 'full' | 'noodle', other_apps }
+//   set_password { user_id, password }        → { ok }   (only accounts that have noodle access; logged, password never stored)
 // Logins are shared with order-app and the recipes app, so a login that is used there is never
 // deleted: only its noodle access (noodle.profiles) is removed.
 const URL_ = Deno.env.get('SUPABASE_URL')!
@@ -64,6 +65,25 @@ Deno.serve(async req => {
       }
       await rest(`profiles?user_id=eq.${uid}`, { method: 'DELETE' })
       return json({ mode: 'noodle', other_apps: other })
+    }
+
+    if (body.action === 'set_password') {
+      const uid = String(body.user_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(uid)) return json({ error: 'bad user id' }, 400)
+      const password = String(body.password || '')
+      if (password.length < 8) return json({ error: 'password too short' }, 400)
+      const target = (await rest(`profiles?select=user_id&user_id=eq.${uid}`))?.[0]
+      if (!target) return json({ error: 'not a noodle account' }, 404)
+      const r = await fetch(`${URL_}/auth/v1/admin/users/${uid}`, { method: 'PUT', headers: svc, body: JSON.stringify({ password }) })
+      const out = await r.json().catch(() => ({}))
+      if (!r.ok) return json({ error: out?.msg || out?.message || 'could not change password' }, 400)
+      // activity log: who changed whose password (never the password itself)
+      try {
+        await rest('audit_log', { method: 'POST', body: JSON.stringify({
+          user_id: me.id, user_email: me.email, action: 'update', table_name: 'passwords', row_id: uid,
+          label: out?.email || uid, changes: { password: 'changed by admin' }, origin: 'app' }) })
+      } catch { /* logging must not block */ }
+      return json({ ok: true })
     }
 
     if (body.action === 'create') {

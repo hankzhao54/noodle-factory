@@ -27,6 +27,7 @@ export default function Users() {
   const myId = session?.user?.id
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(null)
+  const [pwFor, setPwFor] = useState(null)
   const { data, loading, error, reload } = useData(async () => {
     const [users, customers, locs, stores, links] = await Promise.all([
       q(db.rpc('list_users')),
@@ -92,7 +93,9 @@ export default function Users() {
                   </select>)}
               </td>
               <td className="muted nowrap">{fmtDate(u.created_at, t.lang)}</td>
-              <td className="act">{u.user_id !== myId &&
+              <td className="act nowrap">
+                {u.user_id !== myId && <button className="btn btn-sm" onClick={() => setPwFor(u)}>{t('setPassword')}</button>}
+                {u.user_id !== myId &&
                 <button className="btn btn-danger-quiet btn-sm" onClick={() => setRemoving(u)}>{t('delete')}</button>}</td>
             </tr>
           ))}</tbody>
@@ -100,6 +103,7 @@ export default function Users() {
       )}
       {adding && <AddAccount customers={data.customers} onClose={() => setAdding(false)}
         onDone={() => { setAdding(false); reload() }} />}
+      {pwFor && <SetPassword user={pwFor} onClose={() => setPwFor(null)} />}
       {removing && <RemoveAccount user={removing} onClose={() => setRemoving(null)}
         onDone={() => { setRemoving(null); reload() }} />}
     </div>
@@ -163,6 +167,39 @@ function AddAccount({ customers, onClose, onDone }) {
       <div className="modal-foot"><span className="grow" />
         <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
         <button className="btn btn-primary" form="add-account" disabled={busy}>{t('addAccount')}</button>
+      </div>
+    </Modal>
+  )
+}
+
+// admin gives an account a new password (e.g. when the person forgot it); shown once, then passed on in person
+function SetPassword({ user, onClose }) {
+  const t = useT()
+  const toast = useToast()
+  const { data, error } = useData(() => adminUsers({ action: 'inspect', user_id: user.user_id }), [user.user_id])
+  const [pw, setPw] = useState(genPassword)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const other = data?.other_apps || []
+  async function go() {
+    setBusy(true)
+    try { await adminUsers({ action: 'set_password', user_id: user.user_id, password: pw }); setDone(true); toast(t('passwordSet')) }
+    catch (err) { toast(errText(err), 'error') }
+    finally { setBusy(false) }
+  }
+  return (
+    <Modal title={`${t('setPassword')} · ${user.display_name || user.email}`} onClose={onClose}>
+      <ErrorBox error={error} />
+      {other.length > 0 && <p className="note-box">{t('passwordOtherApps', { apps: other.map(a => APP_NAME[a] || a).join(', ') })}</p>}
+      <Field label={t('newPassword')} hint={done ? t('passwordGiveInPerson') : t('newPasswordHint')}>
+        <div className="row-gap">
+          <input value={pw} onChange={e => { setPw(e.target.value); setDone(false) }} minLength={8} autoComplete="off" spellCheck={false} readOnly={done} />
+          {!done && <button type="button" className="btn btn-sm" onClick={() => setPw(genPassword())}>{t('generate')}</button>}
+        </div>
+      </Field>
+      <div className="modal-foot"><span className="grow" />
+        <button className="btn" onClick={onClose}>{done ? t('close') : t('cancel')}</button>
+        {!done && <button className="btn btn-primary" disabled={busy || pw.length < 8 || (!data && !error)} onClick={go}>{t('setPassword')}</button>}
       </div>
     </Modal>
   )
