@@ -78,6 +78,8 @@ export function LangSwitch({ dark }) {
   )
 }
 
+import IdleLogout from './components/IdleLogout'
+
 function StaffShell() {
   const t = useT()
   const { isAdmin, signOut, profile } = useAuth()
@@ -117,6 +119,7 @@ function StaffShell() {
         <span className="topbar-title">{t('appName')}</span>
       </div>
       <div className="scrim" onClick={() => setOpen(false)} />
+      <IdleLogout />
       <main className="main">
         <Routes>
           <Route path="/" element={<Dashboard />} />

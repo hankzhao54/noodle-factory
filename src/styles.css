@@ -410,6 +410,12 @@ textarea { resize: vertical; }
 .existing-orders p { margin: 0; }
 .existing-order { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
+/* auto sign-out warning */
+.idle-warning { position: fixed; z-index: 200; right: 16px; bottom: 16px; max-width: 320px; background: var(--panel, #fff);
+  border: 2px solid var(--short); border-radius: 10px; padding: 14px 16px; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+.idle-warning p { margin: 0 0 8px; }
+@media print { .idle-warning { display: none; } }
+
 /* urgent orders */
 .chip-urgent { border-color: var(--short); color: var(--short); align-self: flex-start; }
 .chip-urgent.on { background: var(--short); color: #fff; }
