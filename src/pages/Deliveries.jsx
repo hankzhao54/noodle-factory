@@ -402,6 +402,21 @@ function NewDelivery({ date, ctx, onClose }) {
   const { data: prices } = useData(() => customerId
     ? q(db.rpc('prices_for_customer', { p_customer: customerId })) : Promise.resolve([]), [customerId])
   const { data: runs } = useData(() => q(db.from('deliveries').select('*').eq('delivery_date', deliveryDate).neq('status', 'done').order('created_at')), [deliveryDate])
+  // orders this customer already has that are not delivered yet: deliver those instead of creating a new one
+  const { data: openOrders } = useData(() => customerId
+    ? q(db.from('orders').select('id,no,status,delivery_date,urgent,location_id,order_lines(product_id,qty)').eq('customer_id', customerId)
+        .in('status', ['submitted', 'confirmed', 'ready']).order('delivery_date'))
+    : Promise.resolve([]), [customerId])
+  const existing = (openOrders || []).filter(o => !storeId || !o.location_id || o.location_id === storeId)
+  async function useExisting(o) {
+    setBusy(true)
+    try {
+      if (o.delivery_date !== deliveryDate) await q(db.rpc('change_order_date', { p_order: o.id, p_date: deliveryDate }))
+      if (o.status === 'submitted') await q(db.from('orders').update({ status: 'confirmed' }).eq('id', o.id))
+      await q(db.from('orders').update({ delivery_id: runId || null }).eq('id', o.id))
+      toast(t('existingOrderScheduled', { no: o.no })); onClose(); ctx.reload()
+    } catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
 
   const items = ctx.data.products.filter(p => p.active).map(p => {
     const s = ctx.data.stock.find(x => x.id === p.id) || { on_hand: 0, reserved: 0 }
@@ -449,6 +464,21 @@ function NewDelivery({ date, ctx, onClose }) {
           {c.vat_no && <div><dt>{t('vatNo')}</dt><dd>{c.vat_no}</dd></div>}
           {c.delivery_notes && <div><dt>{t('deliveryNotes')}</dt><dd className="note-inline">{c.delivery_notes}</dd></div>}
         </dl>
+      )}
+
+      {c && existing.length > 0 && (
+        <div className="note-box existing-orders">
+          <p><b>{t('customerHasOpenOrders')}</b></p>
+          {existing.map(o => (
+            <div key={o.id} className="existing-order">
+              <span>#{o.no} · {fmtDate(o.delivery_date, t.lang)}{o.urgent ? ' · 🚨' : ''} · {o.order_lines.map(l => {
+                const p = ctx.prod(l.product_id); return `${t.pick(p)} ${fmtNum(l.qty, t.lang)} ${p.unit || ''}` }).join(', ')}</span>
+              <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => useExisting(o)}>
+                {o.delivery_date === deliveryDate ? t('scheduleThisOrder') : t('moveAndSchedule', { date: fmtDate(deliveryDate, t.lang) })}</button>
+            </div>
+          ))}
+          <p className="muted small">{t('newOrderOnlyIfExtra')}</p>
+        </div>
       )}
 
       {c && (
