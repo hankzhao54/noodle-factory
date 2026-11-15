@@ -1,0 +1,2 @@
+-- 042 · 缺货提示只看仓库里实际的库存；已下单（未收货）的只显示在旁边，不算库存
+-- (view as applied live; on_order column kept for display)
