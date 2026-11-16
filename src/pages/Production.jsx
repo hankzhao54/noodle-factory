@@ -1,17 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
-import { useT, fmtNum, fmtDate } from '../lib/i18n'
+import { useT, fmtNum, fmtDate, fmtDayShort } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
 import { Link } from 'react-router-dom'
 import LabelPrint from '../components/LabelPrint'
-import { buildPlan, materialNeeds, expYield, theoYield, lossPct } from '../lib/plan'
+import { buildPlan, materialNeeds, expYield, theoYield, lossPct, LOOKAHEAD_DEFAULT } from '../lib/plan'
 
 export default function Production() {
   const t = useT()
   const toast = useToast()
-  const [date, setDate] = useState(todayISO(1))
+  const [date, setDate] = useState(todayISO(LOOKAHEAD_DEFAULT))
+  // default: orders for the next few days (setting production_lookahead_days)
+  useEffect(() => {
+    db.from('settings').select('value').eq('key', 'production_lookahead_days').maybeSingle()
+      .then(({ data: v }) => { const n = Number(v?.value); if (n > 0) setDate(todayISO(n)) })
+  }, [])
   const [tab, setTab] = useState('planned')
   const [finishing, setFinishing] = useState(null)
   const [adding, setAdding] = useState(null)
@@ -72,16 +77,18 @@ export default function Production() {
         </div>
         {plan.length === 0 ? <Empty /> : (
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>{t('name')}</th><th className="num">{t('demand')}</th><th className="num">{t('onHand')}</th>
-              <th className="num">{t('b_planned')}</th><th className="num">{t('toMake')}</th><th className="num">{t('batches')}</th><th /></tr></thead>
+            <thead><tr><th>{t('name')}</th><th>{t('byDeliveryDay')}</th><th className="num">{t('demand')}</th><th className="num">{t('onHand')}</th>
+              <th className="num">{t('b_planned')}</th><th className="num">{t('toMake')}</th><th className="num">{t('batches')}</th><th>{t('needBy')}</th><th /></tr></thead>
             <tbody>{plan.map(r => (
               <tr key={r.p.id} className={r.toMake > 0 ? 'row-todo' : ''}>
                 <td><b>{t.pick(r.p)}</b></td>
+                <td className="plan-days">{r.days.map(x => <span key={x.date} className="day-chip">{fmtDayShort(x.date, t.lang)} <b>{fmtNum(x.qty, t.lang)}</b></span>)}</td>
                 <td className="num">{fmtNum(r.demand, t.lang)} <span className="unit">{r.p.unit}</span></td>
                 <td className="num muted">{fmtNum(r.onHand, t.lang)}</td>
                 <td className="num muted">{fmtNum(r.planned, t.lang)}</td>
                 <td className="num"><b>{fmtNum(r.toMake, t.lang)}</b></td>
                 <td className="num">{r.suggest || '–'}</td>
+                <td className="nowrap">{r.needBy ? <span className={r.needBy <= todayISO(1) ? 'tag tag-low' : 'tag'}>{fmtDayShort(r.needBy, t.lang)}</span> : '–'}</td>
                 <td className="act">{r.suggest > 0 && <button className="btn btn-sm"
                   onClick={() => setAdding({ product_id: r.p.id, batches: r.suggest, planned_date: todayISO() })}>{t('planBatch')}</button>}</td>
               </tr>

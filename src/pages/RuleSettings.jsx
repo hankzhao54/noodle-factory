@@ -9,7 +9,7 @@ import { refreshPublicInfo } from '../lib/publicInfo'
 import { LEGAL } from '../legal/LegalPage'
 
 const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_email', 'company_phone', 'company_authority', 'terms_version']
-const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'urgent_orders', 'idle_logout_minutes', 'lot_expiry_warn_days', ...COMPANY]
+const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'urgent_orders', 'idle_logout_minutes', 'production_lookahead_days', 'lot_expiry_warn_days', ...COMPANY]
 
 // Ordering rules (cutoff, lead time, delivery weekdays, closed dates) and the lot expiry warning
 export default function RuleSettings() {
@@ -74,6 +74,11 @@ export default function RuleSettings() {
                 onChange={e => set('order_bridge_days', e.target.value)} />
               <span className="field-hint">{t('rsBridgeHint')}</span></>}
           </div>
+          <label className="field"><span className="field-label">🍜 {t('rsLookahead')}</span>
+            <select value={v.production_lookahead_days || '5'} disabled={off} onChange={e => set('production_lookahead_days', e.target.value)}>
+              {['1', '2', '3', '4', '5', '6', '7'].map(n => <option key={n} value={n}>{t('rsDays', { n })}</option>)}
+            </select>
+            <span className="field-hint">{t('rsLookaheadHint')}</span></label>
           <label className="field"><span className="field-label">🔒 {t('rsIdle')}</span>
             <select value={v.idle_logout_minutes ?? '30'} disabled={off} onChange={e => set('idle_logout_minutes', e.target.value)}>
               {['10', '15', '30', '60', '120', '0'].map(m => <option key={m} value={m}>{m === '0' ? t('rsIdleNever') : t('rsIdleMin', { m })}</option>)}

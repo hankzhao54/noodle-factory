@@ -416,6 +416,10 @@ textarea { resize: vertical; }
 .idle-warning p { margin: 0 0 8px; }
 @media print { .idle-warning { display: none; } }
 
+/* production plan: demand per delivery day */
+.plan-days { white-space: normal; }
+.day-chip { display: inline-block; margin: 0 6px 2px 0; padding: 1px 6px; border-radius: 6px; background: var(--bg-soft, #f2f2ef); font-size: .85em; white-space: nowrap; }
+
 /* urgent orders */
 .chip-urgent { border-color: var(--short); color: var(--short); align-self: flex-start; }
 .chip-urgent.on { background: var(--short); color: #fff; }

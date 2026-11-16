@@ -286,7 +286,7 @@ const D = {
   expired: ["已过期", "expired", "lejárt"],
   daysLeft: ["剩 {n} 天", "{n} days left", "{n} nap van hátra"],
   lotsUsed: ["实际使用的批号", "Lots actually used", "Felhasznált tételek"],
-  planTomorrow: ["明天（{date}）要生产", "To produce for tomorrow ({date})", "Holnapra ({date}) gyártandó"],
+  planTomorrow: ["接下来要生产（订单到 {date}）", "To produce (orders up to {date})", "Gyártandó ({date}-ig szóló rendelések)"],
   shortForPlan: ["按这个计划原料不够：", "Not enough raw material for this plan:", "Ehhez a tervhez nincs elég alapanyag:"],
   needHave: ["需要 {need}，库存 {have} {unit}", "need {need}, have {have} {unit}", "kell {need}, van {have} {unit}"],
   enoughForPlan: ["原料够用 ✓", "Raw materials are sufficient ✓", "Az alapanyag elegendő ✓"],
@@ -631,6 +631,11 @@ const D = {
   passwordGiveInPerson: ['已设好。把新密码当面或电话告诉本人，不要发在群里；他登录后可以自己再改。', 'Done. Tell the person in person or by phone, not in a group chat.', 'Kész. Személyesen vagy telefonon adja át, ne csoportos chatben.'],
   passwordSet: ['密码已改', 'Password changed', 'Jelszó módosítva'],
   passwordOtherApps: ['注意：这个账号也用来登录 {apps}，那边的密码也会一起变。', 'Note: this login is also used for {apps}; the password changes there too.', 'Figyelem: ez a fiók a(z) {apps} belépéshez is kell, ott is megváltozik a jelszó.'],
+  byDeliveryDay: ['按送货日', 'By delivery day', 'Szállítási naponként'],
+  needBy: ['最晚', 'Needed by', 'Legkésőbb'],
+  rsLookahead: ['生产看几天的订单', 'Production looks ahead', 'Gyártási előretekintés'],
+  rsLookaheadHint: ['首页和生产页把接下来这几天要送的订单都算进去，可以提前分几天做；面的保质期 10 天', 'The dashboard and production page count orders due in the next days, so production can be spread over several days; noodles keep 10 days', 'A kezdőlap és a gyártás a következő napok rendeléseit számolja, így a gyártás több napra osztható'],
+  rsDays: ['{n} 天', '{n} days', '{n} nap'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
@@ -751,6 +756,12 @@ export function fmtFt(n, lang) {
   if (n === null || n === undefined) return '–'
   return Number(n).toLocaleString(LOCALE[lang], { maximumFractionDigits: 0 }) + ' Ft'
 }
+// short day for compact lists: "Tue 17" / "周二 17日" / "K 17."
+export function fmtDayShort(iso, lang) {
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00')
+  return d.toLocaleDateString({ zh: 'zh-CN', en: 'en-GB', hu: 'hu-HU' }[lang] || 'en-GB', { weekday: 'short', day: 'numeric' })
+}
+
 export function fmtDate(d, lang) {
   if (!d) return '–'
   const x = typeof d === 'string' && d.length === 10 ? new Date(d + 'T00:00:00') : new Date(d)

@@ -1,5 +1,6 @@
 // Production plan shared by the dashboard and the production page.
-// demand = open orders (submitted/confirmed) due on or before the date
+// demand = open orders (submitted/confirmed) due on or before the last day looked at
+// (not just tomorrow: noodles are often made a few days ahead, and one day may not be enough)
 // toMake = demand − finished stock − already planned batches; suggest = batches to add
 
 // output per batch: theoretical = recipe yield; expected = after the product's usual loss %
@@ -12,15 +13,26 @@ export function lossPct(batch, p) {
   return (1 - Number(batch.actual_qty) / theo) * 100
 }
 
+// days ahead the plan looks at (setting production_lookahead_days; fresh noodles keep 10 days)
+export const LOOKAHEAD_DEFAULT = 5
+
 export function buildPlan({ products, demand, pstock, batches }) {
   const open = batches.filter(b => b.status === 'planned')
   return products.map(p => {
-    const d = demand.filter(x => x.product_id === p.id).reduce((s, x) => s + Number(x.qty), 0)
+    const mine = demand.filter(x => x.product_id === p.id)
+    const d = mine.reduce((s, x) => s + Number(x.qty), 0)
     const onHand = Number(pstock.find(s => s.id === p.id)?.on_hand || 0)
     const planned = open.filter(b => b.product_id === p.id).reduce((s, b) => s + Number(b.batches) * expYield(p), 0)
     const toMake = Math.max(0, d - Math.max(onHand, 0) - planned)
     const suggest = toMake > 0 ? Math.ceil(toMake / (expYield(p) || 1)) : 0
-    return { p, demand: d, onHand, planned, toMake, suggest }
+    // demand per delivery day, and the first day that stock + planned batches no longer cover
+    const byDay = {}
+    mine.forEach(x => { byDay[x.delivery_date] = (byDay[x.delivery_date] || 0) + Number(x.qty) })
+    const days = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, qty]) => ({ date, qty }))
+    let cum = 0, needBy = null
+    const cover = Math.max(onHand, 0) + planned
+    for (const x of days) { cum += x.qty; if (cum > cover + 1e-9) { needBy = x.date; break } }
+    return { p, demand: d, onHand, planned, toMake, suggest, days, needBy }
   }).filter(r => r.demand > 0 || r.planned > 0)
 }
 

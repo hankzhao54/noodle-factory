@@ -1,11 +1,12 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
-import { useT, fmtNum, fmtDate } from '../lib/i18n'
+import { useT, fmtNum, fmtDate, fmtDayShort } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
 import { Loading, ErrorBox } from '../components/ui'
 import InstallHint from '../components/InstallHint'
-import { buildPlan, materialNeeds } from '../lib/plan'
+import { buildPlan, materialNeeds, LOOKAHEAD_DEFAULT } from '../lib/plan'
 import { daysUntil } from '../lib/lots'
 import { ExpiryTag } from './Inventory'
 
@@ -13,6 +14,8 @@ export default function Dashboard() {
   const t = useT()
   const { profile, isAdmin } = useAuth()
   const tomorrow = todayISO(1)
+  const [ahead, setAhead] = useState(LOOKAHEAD_DEFAULT)
+  const until = todayISO(ahead)
   const { data, error } = useData(async () => {
     const [newOrders, tomorrowOrders, runs, low, batches, pos, pending,
            products, recipe, mstock, pstock, demand, lots, suppliers, warn] = await Promise.all([
@@ -27,14 +30,17 @@ export default function Dashboard() {
       q(db.from('recipe_lines').select('product_id,material_id,qty_per_batch')),
       q(db.from('material_stock').select('id,name_zh,name_en,name_hu,unit,on_hand,track_stock')),
       q(db.from('product_stock').select('id,on_hand')),
-      q(db.from('production_demand').select('*').lte('delivery_date', tomorrow)),
+      q(db.from('production_demand').select('*').lte('delivery_date', until)),
       q(db.from('material_lots').select('*').not('expiry_date', 'is', null).order('expiry_date')),
       q(db.from('suppliers').select('id,name')),
       q(db.from('settings').select('value').eq('key', 'lot_expiry_warn_days').maybeSingle()),
     ])
+    // how many days of orders the plan looks at
+    db.from('settings').select('value').eq('key', 'production_lookahead_days').maybeSingle()
+      .then(({ data: v }) => { const n = Number(v?.value); if (n > 0 && n !== ahead) setAhead(n) })
     return { newOrders, tomorrowOrders, runs, low, batches, pos, pending, products, recipe, mstock, pstock, demand, lots, suppliers,
              warnDays: Number(warn?.value) || 14 }
-  }, [isAdmin, tomorrow])
+  }, [isAdmin, tomorrow, until])
 
   if (error) return <div className="page"><ErrorBox error={error} /></div>
   if (!data) return <div className="page"><Loading /></div>
@@ -51,7 +57,7 @@ export default function Dashboard() {
   ]
   const todo = rows.filter(r => r.n > 0)
 
-  // tomorrow's plan: what still has to be made + materials for open and suggested batches
+  // plan for the next days: what still has to be made + materials for open and suggested batches
   const plan = buildPlan({ ...data, batches: data.batches })
   const toDo = plan.filter(r => r.suggest > 0)
   const byProduct = {}
@@ -88,20 +94,22 @@ export default function Dashboard() {
       {plan.length > 0 && (
         <section className="panel dash-panel">
           <div className="panel-head">
-            <h2>{t('planTomorrow', { date: fmtDate(tomorrow, t.lang) })}</h2>
+            <h2>{t('planTomorrow', { date: fmtDate(until, t.lang) })}</h2>
             <Link className="btn btn-sm" to="/production">{t('nav_production')} →</Link>
           </div>
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>{t('name')}</th><th className="num">{t('demand')}</th><th className="num">{t('onHand')}</th>
-              <th className="num">{t('b_planned')}</th><th className="num">{t('toMake')}</th><th className="num">{t('batches')}</th></tr></thead>
+            <thead><tr><th>{t('name')}</th><th>{t('byDeliveryDay')}</th><th className="num">{t('demand')}</th><th className="num">{t('onHand')}</th>
+              <th className="num">{t('b_planned')}</th><th className="num">{t('toMake')}</th><th className="num">{t('batches')}</th><th>{t('needBy')}</th></tr></thead>
             <tbody>{plan.map(r => (
               <tr key={r.p.id} className={r.toMake > 0 ? 'row-todo' : ''}>
                 <td><b>{t.pick(r.p)}</b></td>
+                <td className="plan-days">{r.days.map(x => <span key={x.date} className="day-chip">{fmtDayShort(x.date, t.lang)} <b>{fmtNum(x.qty, t.lang)}</b></span>)}</td>
                 <td className="num">{fmtNum(r.demand, t.lang)} <span className="unit">{r.p.unit}</span></td>
                 <td className="num muted">{fmtNum(r.onHand, t.lang)}</td>
                 <td className="num muted">{fmtNum(r.planned, t.lang)}</td>
                 <td className="num"><b>{r.toMake > 0 ? fmtNum(r.toMake, t.lang) : '✓'}</b></td>
                 <td className="num">{r.suggest || '–'}</td>
+                <td className="nowrap">{r.needBy ? <span className={r.needBy <= todayISO(1) ? 'tag tag-low' : 'tag'}>{fmtDayShort(r.needBy, t.lang)}</span> : '–'}</td>
               </tr>
             ))}</tbody>
           </table></div>
