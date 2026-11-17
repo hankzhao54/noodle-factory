@@ -51,11 +51,13 @@ export default function Dashboard() {
     { n: data.newOrders.length, label: t('newOrders'), to: '/orders', urgent: true },
     { n: data.pending.length, label: t('pendingAccounts'), to: '/users', urgent: true },
     { n: openRuns, label: t('todayDeliveries'), to: '/deliveries' },
+    // first days of the month: last month's report is ready
+    ...(isAdmin && new Date().getDate() <= 5 ? [{ n: '📊', label: t('lastMonthReport'), to: '/monthly-report' }] : []),
     { n: data.tomorrowOrders.length, label: t('tomorrowOrders'), to: '/orders' },
     { n: data.batches.length, label: t('openBatches'), to: '/production' },
     { n: data.pos.length, label: t('openPOs'), to: '/purchasing' },
   ]
-  const todo = rows.filter(r => r.n > 0)
+  const todo = rows.filter(r => typeof r.n === 'string' || r.n > 0)
 
   // plan for the next days: what still has to be made + materials for open and suggested batches
   const plan = buildPlan({ ...data, batches: data.batches })

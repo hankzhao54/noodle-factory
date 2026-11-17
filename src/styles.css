@@ -369,7 +369,12 @@ textarea { resize: vertical; }
   /* no page margin, so the browser prints no page title / URL in the corners; the note pads itself */
   @page { size: A4; margin: 0; }
   body { background: #fff; }
-  body > #root { display: none; }
+  body:not(.printing-report) > #root { display: none; }
+  body.printing-report .print-only { display: none !important; }
+  body.printing-report .side, body.printing-report .topbar, body.printing-report .scrim, body.printing-report .page-head .btn, body.printing-report .idle-warning { display: none !important; }
+  body.printing-report .report-page { padding: 12mm 14mm; }
+  body.printing-report .main, body.printing-report .shell { display: block !important; margin: 0 !important; }
+  body.printing-report .panel { break-inside: avoid; box-shadow: none; }
   .print-only { display: block; }
   .dnote { page-break-after: always; break-after: page; padding: 14mm 15mm; font-size: 10.5pt; line-height: 1.4; color: #000;
           font-family: var(--font); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
@@ -419,6 +424,16 @@ textarea { resize: vertical; }
 /* production plan: demand per delivery day */
 .plan-days { white-space: normal; }
 .day-chip { display: inline-block; margin: 0 6px 2px 0; padding: 1px 6px; border-radius: 6px; background: var(--bg-soft, #f2f2ef); font-size: .85em; white-space: nowrap; }
+
+/* monthly report */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 12px 0; }
+.kpi { background: var(--panel, #fff); border: 1px solid var(--line, #e5e7e4); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi-label { font-size: .85em; color: var(--muted, #5b6770); }
+.kpi-value { font-size: 1.35em; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: .8em; color: var(--muted, #5b6770); }
+.report-section { margin-top: 14px; }
+.report-section h2 { font-size: 1.05rem; margin: 0 0 8px; }
+.neg { color: var(--short); }
 
 /* urgent orders */
 .chip-urgent { border-color: var(--short); color: var(--short); align-self: flex-start; }

@@ -3,6 +3,8 @@ import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtFt } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, Empty } from '../components/ui'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 
 const monthStart = () => todayISO(0).slice(0, 8) + '01'
 const endOfDay = iso => iso + 'T23:59:59.999'
@@ -10,6 +12,7 @@ const endOfDay = iso => iso + 'T23:59:59.999'
 // Simple management reports for a date range; every table can be downloaded as CSV.
 export default function Reports() {
   const t = useT()
+  const { isAdmin } = useAuth()
   const [from, setFrom] = useState(monthStart())
   const [to, setTo] = useState(todayISO())
   const { data, loading, error } = useData(async () => {
@@ -40,6 +43,7 @@ export default function Reports() {
   return (
     <div className="page">
       <PageHead title={t('nav_reports')}>
+        {isAdmin && <Link className="btn" to="/monthly-report">{t('nav_monthReport')} →</Link>}
         <label className="inline-field">{t('from')} <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} /></label>
         <label className="inline-field">{t('to')} <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></label>
       </PageHead>
