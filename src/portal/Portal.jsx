@@ -4,7 +4,7 @@ import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { LangSwitch } from '../App'
-import { Loading, ErrorBox, Empty, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
+import { Loading, ErrorBox, Empty, Status, Tabs, NumInput, Modal, Field, useToast, errText } from '../components/ui'
 import QtyPicker, { cartTotal } from '../components/QtyPicker'
 import { dateProblem, nextDates, deliveryDays, dayName } from '../lib/orderRules'
 import InstallHint from '../components/InstallHint'
@@ -20,15 +20,16 @@ export default function Portal() {
   const [tab, setTab] = useState('order')
   const [qty, setQty] = useState({})
   const { data, error, reload } = useData(async () => {
-    const [me, catalog, orders, rules, pinfo, editInfo] = await Promise.all([
+    const [me, catalog, orders, rules, pinfo, editInfo, requests] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
       q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, urgent, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
       q(db.rpc('my_order_edit_info')).catch(() => ({})),
+      q(db.from('order_change_requests').select('*').order('created_at', { ascending: false }).limit(100)).catch(() => []),
     ])
-    return { me, catalog, orders, rules, pinfo, editInfo: editInfo || {} }
+    return { me, catalog, orders, rules, pinfo, editInfo: editInfo || {}, requests: requests || [] }
   })
 
   return (
@@ -49,7 +50,7 @@ export default function Portal() {
         <OrderSheet blocked={needTerms} info={info} pinfo={data.pinfo} internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
           onPlaced={() => { setQty({}); reload(); setTab('history') }} />
       ) : (
-        <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} editInfo={data.editInfo} reload={reload}
+        <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} editInfo={data.editInfo} requests={data.requests} reload={reload}
           onAgain={o => {
             const next = {}
             o.order_lines.forEach(l => { if (data.catalog.some(p => p.id === l.product_id)) next[l.product_id] = Number(l.qty) })
@@ -179,7 +180,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
   )
 }
 
-function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
+function History({ internal, orders, catalog, editInfo, requests = [], reload, onAgain }) {
   const t = useT()
   const toast = useToast()
   const [openId, setOpenId] = useState(null)
@@ -187,6 +188,7 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
   const [editing, setEditing] = useState(null) // order id being changed
   const [draft, setDraft] = useState({})       // line id → qty (0 = cancel)
   const [busy, setBusy] = useState(false)
+  const [asking, setAsking] = useState(null)   // order for which a change request is being written
   const prod = id => catalog.find(p => p.id === id) || {}
   if (!orders.length) return <Empty />
   async function cancel(o) {
@@ -214,6 +216,11 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
         const locked = new Set(info?.locked || [])
         const isEditing = editing === o.id
         const q0 = l => (l.id in draft ? draft[l.id] : Number(l.qty))
+        const reqs = requests.filter(r => r.order_id === o.id)
+        const pending = reqs.find(r => r.status === 'pending')
+        const lastDecided = reqs.find(r => r.status === 'approved' || r.status === 'rejected')
+        // can't change it directly any more (or some products are locked): ask the factory
+        const canRequest = (!info || locked.size > 0) && ['submitted', 'confirmed', 'ready'].includes(o.status)
         return (
           <li key={o.id} className={open ? 'open' : ''}>
             <button className="history-row" aria-expanded={open} onClick={() => { setOpenId(open ? null : o.id); setEditing(null); setDraft({}) }}>
@@ -249,19 +256,98 @@ function History({ internal, orders, catalog, editInfo, reload, onAgain }) {
                   </> : <>
                     <button className="btn btn-sm" onClick={() => onAgain(o)}>{t('orderAgain')}</button>
                     {info && <button className="btn btn-sm" onClick={() => { setEditing(o.id); setDraft({}) }}>{t(internal ? 'changeOrder' : 'cancelItems')}</button>}
+                    {canRequest && !pending && <button className="btn btn-sm" onClick={() => setAsking(o)}>✋ {t('requestChange')}</button>}
                     {info && !locked.size && (ask === 'order:' + o.id
                       ? <button className="btn btn-sm btn-danger" onClick={() => cancel(o)}>{t('cancelOrderConfirm')}</button>
                       : <button className="btn btn-sm btn-danger-quiet" onClick={() => setAsk('order:' + o.id)}>{t('cancelOrder')}</button>)}
                   </>}
                 </div>
+                {pending && <RequestInfo r={pending} prod={prod} lines={o.order_lines} reload={reload} />}
+                {!pending && lastDecided && <p className={`small ${lastDecided.status === 'approved' ? 'ok-text' : 'error-text'}`}>
+                  {t(lastDecided.status === 'approved' ? 'changeApproved' : 'changeRejected')}{lastDecided.decision_note ? `: ${lastDecided.decision_note}` : ''}</p>}
                 {o.status === 'delivered' && o.delivered_at && <p className="muted small">✓ {t('receivedAt')} {fmtDateTime(o.delivered_at, t.lang)}{o.received_by ? ` · ${o.received_by}` : ''}</p>}
-                {internal && o.status === 'confirmed' && !info && o.delivery_date >= todayISO() && <p className="muted small">{t('cantChangeNow')}</p>}
+                
               </div>
             )}
           </li>
         )
       })}
+      {asking && <ChangeRequest order={asking} catalog={catalog} onClose={() => setAsking(null)} onDone={() => { setAsking(null); reload() }} />}
     </ul>
+  )
+}
+
+// a change request waiting for the factory, with "withdraw"
+function RequestInfo({ r, prod, lines, reload }) {
+  const t = useT()
+  const toast = useToast()
+  const lineOf = id => lines.find(l => l.id === id) || {}
+  async function withdraw() {
+    try { await q(db.rpc('withdraw_change_request', { p_request: r.id })); toast(t('requestWithdrawn')); reload() }
+    catch (e) { toast(errText(e), 'error') }
+  }
+  return (
+    <div className="note-box small change-pending">
+      <b>⏳ {t('changePending')}</b>
+      <ul>
+        {r.lines.map(c => { const l = lineOf(c.line_id); const p = prod(l.product_id)
+          return <li key={c.line_id}>{t.pick(p)}: {fmtNum(l.qty, t.lang)} → {Number(c.qty) > 0 ? `${fmtNum(c.qty, t.lang)} ${p.unit || ''}` : '✕'}</li> })}
+        {r.additions.map(a => { const p = prod(a.product_id)
+          return <li key={a.product_id}>+ {t.pick(p)} {fmtNum(a.qty, t.lang)} {p.unit || ''}</li> })}
+        {r.delivery_date && <li>📅 {fmtDate(r.delivery_date, t.lang)}</li>}
+        {r.note && <li>“{r.note}”</li>}
+      </ul>
+      <button className="btn-link small" onClick={withdraw}>{t('withdrawRequest')}</button>
+    </div>
+  )
+}
+
+// ask the factory to change a confirmed order: new quantities, extra products, another day, a note
+function ChangeRequest({ order: o, catalog, onClose, onDone }) {
+  const t = useT()
+  const toast = useToast()
+  const [qty, setQty] = useState(() => Object.fromEntries(o.order_lines.map(l => [l.id, Number(l.qty)])))
+  const [adds, setAdds] = useState([])          // [{ product_id, qty }]
+  const [date, setDate] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const prod = id => catalog.find(p => p.id === id) || {}
+  const inOrder = new Set(o.order_lines.map(l => l.product_id))
+  const addable = catalog.filter(p => !inOrder.has(p.id) && !adds.some(a => a.product_id === p.id))
+  async function send() {
+    setBusy(true)
+    try {
+      await q(db.rpc('request_order_change', {
+        p_order: o.id,
+        p_lines: o.order_lines.map(l => ({ line_id: l.id, qty: Number(qty[l.id] || 0) })),
+        p_additions: adds.filter(a => Number(a.qty) > 0),
+        p_date: date || null, p_note: note || null }))
+      toast(t('requestSent')); onDone()
+    } catch (e) { toast(/nothing to change/.test(e.message || '') ? t('nothingChanged') : errText(e), 'error'); setBusy(false) }
+  }
+  return (
+    <Modal title={`✋ ${t('requestChange')} · #${o.no}`} onClose={onClose}>
+      <p className="muted small">{t('requestChangeHint')}</p>
+      <div className="table-wrap"><table className="table compact"><tbody>
+        {o.order_lines.map(l => { const p = prod(l.product_id); return (
+          <tr key={l.id}><td>{t.pick(p) || '–'}</td>
+            <td className="num"><NumInput className="input-sm" value={qty[l.id]} min={0} onChange={v => setQty(x => ({ ...x, [l.id]: v ?? 0 }))} /> {p.unit}</td></tr>) })}
+        {adds.map((a, i) => { const p = prod(a.product_id); return (
+          <tr key={a.product_id}><td>+ {t.pick(p)}</td>
+            <td className="num"><NumInput className="input-sm" value={a.qty} min={0} onChange={v => setAdds(x => x.map((y, j) => j === i ? { ...y, qty: v ?? 0 } : y))} /> {p.unit}</td></tr>) })}
+      </tbody></table></div>
+      {addable.length > 0 && (
+        <select value="" onChange={e => e.target.value && setAdds(x => [...x, { product_id: e.target.value, qty: 0 }])}>
+          <option value="">+ {t('addProduct')}</option>
+          {addable.map(p => <option key={p.id} value={p.id}>{t.pick(p)}</option>)}
+        </select>)}
+      <Field label={t('newDeliveryDateOptional')}><input type="date" value={date} min={todayISO()} onChange={e => setDate(e.target.value)} /></Field>
+      <Field label={t('notes')}><textarea rows={2} value={note} onChange={e => setNote(e.target.value)} /></Field>
+      <div className="modal-foot"><span className="grow" />
+        <button className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn btn-primary" disabled={busy} onClick={send}>{t('sendRequest')}</button>
+      </div>
+    </Modal>
   )
 }
 

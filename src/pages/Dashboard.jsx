@@ -38,7 +38,8 @@ export default function Dashboard() {
     // how many days of orders the plan looks at
     db.from('settings').select('value').eq('key', 'production_lookahead_days').maybeSingle()
       .then(({ data: v }) => { const n = Number(v?.value); if (n > 0 && n !== ahead) setAhead(n) })
-    return { newOrders, tomorrowOrders, runs, low, batches, pos, pending, products, recipe, mstock, pstock, demand, lots, suppliers,
+    const changeReqs = await q(db.from('order_change_requests').select('id').eq('status', 'pending')).catch(() => [])
+    return { changeReqs, newOrders, tomorrowOrders, runs, low, batches, pos, pending, products, recipe, mstock, pstock, demand, lots, suppliers,
              warnDays: Number(warn?.value) || 14 }
   }, [isAdmin, tomorrow, until])
 
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const expiring = data.lots.filter(l => daysUntil(l.expiry_date) <= data.warnDays)
   const rows = [
     { n: data.newOrders.length, label: t('newOrders'), to: '/orders', urgent: true },
+    { n: data.changeReqs.length, label: t('changeRequestsTodo'), to: '/orders', urgent: true },
     { n: data.pending.length, label: t('pendingAccounts'), to: '/users', urgent: true },
     { n: openRuns, label: t('todayDeliveries'), to: '/deliveries' },
     // first days of the month: last month's report is ready

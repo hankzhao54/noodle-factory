@@ -435,6 +435,12 @@ textarea { resize: vertical; }
 .report-section h2 { font-size: 1.05rem; margin: 0 0 8px; }
 .neg { color: var(--short); }
 
+/* order change requests */
+.change-request ul, .change-pending ul { margin: 6px 0; padding-left: 18px; }
+.change-request input { width: 100%; }
+.ok-text { color: var(--ok, #2e7d32); }
+.error-text { color: var(--short); }
+
 /* urgent orders */
 .chip-urgent { border-color: var(--short); color: var(--short); align-self: flex-start; }
 .chip-urgent.on { background: var(--short); color: #fff; }

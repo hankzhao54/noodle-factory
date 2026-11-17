@@ -24,7 +24,8 @@ export default function Orders() {
     // who placed each order (name, or e-mail when no name is set)
     const ids = [...new Set(orders.map(o => o.created_by).filter(Boolean))]
     const names = ids.length ? (await q(db.rpc('staff_user_names', { p_ids: ids }))) || {} : {}
-    return { orders, customers, products, stores, names }
+    const requests = await q(db.from('order_change_requests').select('*').eq('status', 'pending'))
+    return { orders, customers, products, stores, names, requests }
   }, [from])
 
   if (loading && !data) return <div className="page"><Loading /></div>
@@ -57,6 +58,7 @@ export default function Orders() {
               <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
               <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
                 {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
+                {data.requests.some(r => r.order_id === o.id) && <span className="tag tag-low">✋ {t('changeRequestTag')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>
               <td className="muted small">{data.names[o.created_by] || '–'}</td>
               <td className="muted small">{o.order_lines.map(l => {
@@ -69,7 +71,7 @@ export default function Orders() {
           ))}</tbody>
         </table></div>
       )}
-      {detail && <OrderDetail order={detail} customer={cust(detail.customer_id)} products={data.products} orderedBy={data.names[detail.created_by]}
+      {detail && <OrderDetail order={detail} customer={cust(detail.customer_id)} products={data.products} orderedBy={data.names[detail.created_by]} request={data.requests.find(r => r.order_id === detail.id)}
         onClose={() => setDetail(null)} onDone={() => { setDetail(null); reload() }} />}
       {creating && <NewOrder customers={data.customers} products={data.products} stores={data.stores}
         onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload() }} />}
@@ -77,7 +79,7 @@ export default function Orders() {
   )
 }
 
-export function OrderDetail({ order, customer, products, onClose, onDone, readOnly, orderedBy }) {
+export function OrderDetail({ order, customer, products, onClose, onDone, readOnly, orderedBy, request }) {
   const t = useT()
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
@@ -130,6 +132,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         {orderedBy && <span className="muted">{t('orderedBy')}: {orderedBy}</span>}
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
+      {request && mode === 'view' && <DecideRequest request={request} order={order} products={products} onDone={onDone} />}
       {mode !== 'view' && <p className="note-box small">{t(mode === 'edit' ? 'editOrderHint' : mode === 'date' ? 'changeDateHint' : 'splitOrderHint')}</p>}
       <table className="table compact">
         <thead><tr>{mode === 'split' && <th />}<th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('price')}</th><th className="num">{t('total')}</th>{mode === 'edit' && <th />}</tr></thead>
@@ -245,5 +248,41 @@ function NewOrder({ customers, products, stores, onClose, onDone }) {
         <button className="btn btn-primary" disabled={!customerId || (myStores.length > 0 && !storeId) || !Object.keys(qty).length} onClick={save}>{t('placeOrder')}</button>
       </div>
     </Modal>
+  )
+}
+
+// a customer's change request on this order: show what they want, approve (applies it) or reject
+function DecideRequest({ request: r, order, products, onDone }) {
+  const t = useT()
+  const toast = useToast()
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const prod = id => products.find(p => p.id === id) || {}
+  const lineOf = id => order.order_lines.find(l => l.id === id) || {}
+  async function decide(approve) {
+    if (!approve && !note.trim()) { toast(t('rejectNeedsReason'), 'error'); return }
+    setBusy(true)
+    try {
+      const res = await q(db.rpc('decide_change_request', { p_request: r.id, p_approve: approve, p_note: note || null }))
+      toast(approve ? (res?.cancelled ? t('o_cancelled') : t('changeApproved')) : t('changeRejected')); onDone()
+    } catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
+  return (
+    <div className="note-box change-request">
+      <p><b>✋ {t('changeRequestTitle')}</b> <span className="muted small">{new Date(r.created_at).toLocaleString()}</span></p>
+      <ul>
+        {r.lines.map(c => { const l = lineOf(c.line_id); const p = prod(l.product_id)
+          return <li key={c.line_id}>{t.pick(p)}: {fmtNum(l.qty, t.lang)} → <b>{Number(c.qty) > 0 ? `${fmtNum(c.qty, t.lang)} ${p.unit || ''}` : '✕'}</b></li> })}
+        {r.additions.map(a => { const p = prod(a.product_id)
+          return <li key={a.product_id}>+ <b>{t.pick(p)} {fmtNum(a.qty, t.lang)} {p.unit || ''}</b></li> })}
+        {r.delivery_date && <li>📅 {fmtDate(order.delivery_date, t.lang)} → <b>{fmtDate(r.delivery_date, t.lang)}</b></li>}
+        {r.note && <li>“{r.note}”</li>}
+      </ul>
+      <input placeholder={t('decisionNote')} value={note} onChange={e => setNote(e.target.value)} />
+      <div className="row-gap" style={{ marginTop: 8 }}>
+        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => decide(true)}>✓ {t('approveChange')}</button>
+        <button className="btn btn-danger-quiet btn-sm" disabled={busy} onClick={() => decide(false)}>{t('rejectChange')}</button>
+      </div>
+    </div>
   )
 }
