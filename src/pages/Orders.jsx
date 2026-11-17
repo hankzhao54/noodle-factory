@@ -272,6 +272,7 @@ function DecideRequest({ request: r, order, products, onDone }) {
       <p><b>✋ {t('changeRequestTitle')}</b> <span className="muted small">{new Date(r.created_at).toLocaleString()}</span></p>
       <ul>
         {r.lines.map(c => { const l = lineOf(c.line_id); const p = prod(l.product_id)
+          if (!l.id) return <li key={c.line_id} className="muted"><s>{fmtNum(c.qty, t.lang)}</s> · {t('reqLineGone')}</li>
           return <li key={c.line_id}>{t.pick(p)}: {fmtNum(l.qty, t.lang)} → <b>{Number(c.qty) > 0 ? `${fmtNum(c.qty, t.lang)} ${p.unit || ''}` : '✕'}</b></li> })}
         {r.additions.map(a => { const p = prod(a.product_id)
           return <li key={a.product_id}>+ <b>{t.pick(p)} {fmtNum(a.qty, t.lang)} {p.unit || ''}</b></li> })}

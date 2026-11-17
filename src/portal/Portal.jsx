@@ -265,7 +265,7 @@ function History({ internal, orders, catalog, editInfo, requests = [], reload, o
                 {pending && <RequestInfo r={pending} prod={prod} lines={o.order_lines} reload={reload} />}
                 {!pending && lastDecided && <p className={`small ${lastDecided.status === 'approved' ? 'ok-text' : 'error-text'}`}>
                   {t(lastDecided.status === 'approved' ? 'changeApproved' : 'changeRejected')}{lastDecided.decision_note ? `: ${lastDecided.decision_note}` : ''}</p>}
-                {o.status === 'delivered' && o.delivered_at && <p className="muted small">✓ {t('receivedAt')} {fmtDateTime(o.delivered_at, t.lang)}{o.received_by ? ` · ${o.received_by}` : ''}</p>}
+                {o.status === 'delivered' && o.delivered_at && <p className="muted small">✓ {t('receivedOn')} {fmtDateTime(o.delivered_at, t.lang)}{o.received_by ? ` · ${o.received_by}` : ''}</p>}
                 
               </div>
             )}
@@ -290,9 +290,9 @@ function RequestInfo({ r, prod, lines, reload }) {
     <div className="note-box small change-pending">
       <b>⏳ {t('changePending')}</b>
       <ul>
-        {r.lines.map(c => { const l = lineOf(c.line_id); const p = prod(l.product_id)
+        {r.lines.map(c => { const l = lineOf(c.line_id); if (!l.id) return null; const p = prod(l.product_id) || {}
           return <li key={c.line_id}>{t.pick(p)}: {fmtNum(l.qty, t.lang)} → {Number(c.qty) > 0 ? `${fmtNum(c.qty, t.lang)} ${p.unit || ''}` : '✕'}</li> })}
-        {r.additions.map(a => { const p = prod(a.product_id)
+        {r.additions.map(a => { const p = prod(a.product_id) || {}
           return <li key={a.product_id}>+ {t.pick(p)} {fmtNum(a.qty, t.lang)} {p.unit || ''}</li> })}
         {r.delivery_date && <li>📅 {fmtDate(r.delivery_date, t.lang)}</li>}
         {r.note && <li>“{r.note}”</li>}

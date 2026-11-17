@@ -408,7 +408,7 @@ function NewDelivery({ date, ctx, onClose }) {
         .in('status', ['submitted', 'confirmed', 'ready']).order('delivery_date'))
     : Promise.resolve([]), [customerId])
   const existing = (openOrders || []).filter(o => !storeId || !o.location_id || o.location_id === storeId)
-  async function useExisting(o) {
+  async function attachExisting(o) {
     setBusy(true)
     try {
       if (o.delivery_date !== deliveryDate) await q(db.rpc('change_order_date', { p_order: o.id, p_date: deliveryDate }))
@@ -473,7 +473,7 @@ function NewDelivery({ date, ctx, onClose }) {
             <div key={o.id} className="existing-order">
               <span>#{o.no} · {fmtDate(o.delivery_date, t.lang)}{o.urgent ? ' · 🚨' : ''} · {o.order_lines.map(l => {
                 const p = ctx.prod(l.product_id); return `${t.pick(p)} ${fmtNum(l.qty, t.lang)} ${p.unit || ''}` }).join(', ')}</span>
-              <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => useExisting(o)}>
+              <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => attachExisting(o)}>
                 {o.delivery_date === deliveryDate ? t('scheduleThisOrder') : t('moveAndSchedule', { date: fmtDate(deliveryDate, t.lang) })}</button>
             </div>
           ))}
