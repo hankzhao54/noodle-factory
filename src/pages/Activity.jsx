@@ -8,7 +8,8 @@ import { Loading, ErrorBox, PageHead, Empty } from '../components/ui'
 // Written by database triggers (019_audit_log.sql), so changes made through any screen or RPC are included.
 const TABLES = ['orders', 'order_lines', 'customers', 'customer_prices', 'price_tiers', 'price_tier_prices', 'products',
   'recipe_lines', 'materials', 'suppliers', 'purchase_orders', 'purchase_order_lines', 'production_batches',
-  'stock_movements', 'deliveries', 'profiles', 'settings']
+  'stock_movements', 'deliveries', 'order_change_requests', 'customer_locations', 'profiles', 'profile_customers',
+  'employees', 'shifts', 'time_entries', 'time_breaks', 'settings']
 const RANGES = [1, 7, 30, 90]
 
 const short = v => {
@@ -87,7 +88,7 @@ export default function Activity() {
                 <td className="muted small nowrap">{when(r.at)}</td>
                 <td className="small">{r.user_email || <span className="muted">{t('acSystem')}</span>}</td>
                 <td><span className={`ac-tag ac-${r.action}`}>{t('ac_' + r.action)}</span></td>
-                <td className="small">{r.table_name ? t('tbl_' + r.table_name) : '–'}{r.label ? <> · <b>{r.label}</b></> : ''}</td>
+                <td className="small">{r.table_name ? (t('tbl_' + r.table_name) === 'tbl_' + r.table_name ? r.table_name : t('tbl_' + r.table_name)) : '–'}{r.label ? <> · <b>{r.label}</b></> : ''}</td>
                 <td className="small ac-sum">{summary(r)}</td>
               </tr>
               {open === r.id && <tr className="ac-detail"><td colSpan={5}>
