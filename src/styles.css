@@ -594,3 +594,4 @@ textarea { resize: vertical; }
   background: var(--kansui-soft); color: var(--kansui-ink); font-size: 14px; }
 .pack-row.is-packed { background: var(--ok-soft); color: var(--ok); }
 .tag-packed { background: var(--ok-soft); color: var(--ok); }
+.text-short { color: var(--short); font-weight: 600; }

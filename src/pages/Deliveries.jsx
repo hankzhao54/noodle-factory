@@ -121,6 +121,7 @@ export default function Deliveries() {
       {modal?.kind === 'new' && <NewDelivery date={date} ctx={ctx} onClose={() => setModal(null)} />}
       {modal?.kind === 'run' && <RunForm date={date} run={modal.run} onClose={() => setModal(null)} onDone={() => { setModal(null); reload() }} />}
       {modal?.kind === 'deliver' && <DeliverDialog order={modal.order} ctx={ctx} onClose={() => setModal(null)} />}
+      {modal?.kind === 'split' && <SplitDialog order={modal.order} ctx={ctx} onClose={() => setModal(null)} />}
 
       {printList && createPortal(
         <div className="print-only">
@@ -237,6 +238,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         {internal && !delivered && <span className="muted small">{t('confirmInApp')}</span>}
         <button className="btn btn-sm" onClick={() => ctx.printLabels([o])}>{t('printShipLabel')}</button>
         {!internal && <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
+        {!delivered && <button className="btn btn-sm" onClick={() => ctx.setModal({ kind: 'split', order: o })}>✂️ {t('splitLater')}</button>}
         {!delivered && !o.packed_at && <ReadyButton order={o} ctx={ctx} />}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
@@ -409,6 +411,71 @@ function DeliverDialog({ order: o, ctx, onClose }) {
         <div className="modal-foot"><span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
           <button className="btn btn-primary" disabled={busy}>{busy ? t('uploading') : t('confirmDelivered')}</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+/* ---------------- split: deliver part now, the rest on a later day ---------------- */
+function SplitDialog({ order: o, ctx, onClose }) {
+  const t = useT()
+  const toast = useToast()
+  const c = ctx.shipTo(o)
+  const stockOf = pid => ctx.data.stock.find(s => s.id === pid)
+  // prefill: what the stock covers now, the rest later
+  const [now, setNow] = useState(() => Object.fromEntries(o.order_lines.map(l => {
+    const s = stockOf(l.product_id); const q0 = Number(l.qty)
+    return [l.id, s && Number(s.on_hand) < q0 ? Math.max(0, Math.floor(Number(s.on_hand) * 10) / 10) : q0]
+  })))
+  const [date, setDate] = useState(todayISO(1) > o.delivery_date ? todayISO(1) : (() => {
+    const d = new Date(o.delivery_date + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10)
+  })())
+  const [busy, setBusy] = useState(false)
+  const later = l => Math.max(0, Number(l.qty) - Math.min(Number(now[l.id] ?? 0), Number(l.qty)))
+  const anyLater = o.order_lines.some(l => later(l) > 0)
+  const anyNow = o.order_lines.some(l => Number(now[l.id] ?? 0) > 0)
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!anyLater) return toast(t('splitNothing'), 'error')
+    if (!anyNow) return toast(t('splitKeepOne'), 'error')
+    setBusy(true)
+    try {
+      await q(db.rpc('split_order_qty', {
+        p_order: o.id,
+        p_items: o.order_lines.filter(l => later(l) > 0).map(l => ({ line_id: l.id, qty: later(l) })),
+        p_delivery_date: date,
+      }))
+      toast(t('splitDone')); onClose(); ctx.reload()
+    } catch (err) { toast(errText(err), 'error'); setBusy(false) }
+  }
+
+  return (
+    <Modal title={`✂️ ${t('splitLater')} · #${o.no} ${c.name}`} onClose={onClose}>
+      <form onSubmit={submit} className="stack">
+        <p className="muted small">{t('splitLaterHint')}</p>
+        <table className="table compact">
+          <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('inStock')}</th><th className="num">{t('deliverNow')}</th><th className="num">{t('deliverLater')}</th></tr></thead>
+          <tbody>{o.order_lines.map(l => {
+            const p = ctx.prod(l.product_id); const s = stockOf(l.product_id)
+            const short = s && Number(s.on_hand) < Number(l.qty)
+            return (
+              <tr key={l.id}>
+                <td>{t.pick(p)}</td>
+                <td className="num muted">{fmtNum(l.qty, t.lang)} {p.unit}</td>
+                <td className={'num' + (short ? ' text-short' : ' muted')}>{s ? fmtNum(s.on_hand, t.lang) : '–'}</td>
+                <td className="num"><NumInput className="input-sm" min={0} max={Number(l.qty)} value={now[l.id]} aria-label={`${t.pick(p)} ${t('deliverNow')}`}
+                  onChange={v => setNow(x => ({ ...x, [l.id]: v }))} /></td>
+                <td className="num">{later(l) > 0 ? <b>{fmtNum(later(l), t.lang)}</b> : <span className="muted">–</span>}</td>
+              </tr>
+            )
+          })}</tbody>
+        </table>
+        <Field label={t('deliverLaterOn')}><input type="date" required min={todayISO()} value={date} onChange={e => setDate(e.target.value)} /></Field>
+        <div className="modal-foot"><span className="grow" />
+          <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+          <button className="btn btn-primary" disabled={busy || !anyLater || !anyNow}>✂️ {t('splitLaterBtn')}</button>
         </div>
       </form>
     </Modal>
