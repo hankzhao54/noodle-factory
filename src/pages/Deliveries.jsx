@@ -15,7 +15,7 @@ const OPEN = ['submitted', 'confirmed', 'ready']
 export default function Deliveries() {
   const t = useT()
   const toast = useToast()
-  const [date, setDate] = useState(todayISO())
+  const [date, setDate] = useState(() => new URLSearchParams(window.location.search).get('date') || todayISO())
   const [modal, setModal] = useState(null)      // {kind, ...}
   const [printList, setPrintList] = useState(null)
   // company details for the notes: load them now, not when printing starts (they would arrive too late)
@@ -189,6 +189,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <span className="grow" />
         <Status value={o.status} prefix="o" />
       </header>
+      {(c.needs_packing || o.packed_at) && !delivered && <PackRow order={o} ctx={ctx} />}
 
       <dl className="cust-info">
         {c.address && <div><dt>{t('address')}</dt><dd>
@@ -239,6 +240,33 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
     </article>
+  )
+}
+
+/* ---------------- packing (customers that need their order packed) ---------------- */
+function PackRow({ order: o, ctx }) {
+  const t = useT()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  async function set(packed) {
+    setBusy(true)
+    try { await q(db.rpc('set_order_packed', { p_order: o.id, p_packed: packed })); toast(packed ? t('packedDone') : t('packedUndone')); ctx.reload() }
+    catch (e) { toast(errText(e), 'error') }
+    setBusy(false)
+  }
+  if (o.packed_at) return (
+    <div className="pack-row is-packed">
+      <span>📦 ✓ <b>{t('packed')}</b> · {new Date(o.packed_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{o.packed_by_name ? ` · ${o.packed_by_name}` : ''}</span>
+      <span className="grow" />
+      <button className="btn-link small" disabled={busy} onClick={() => set(false)}>{t('unpack')}</button>
+    </div>
+  )
+  return (
+    <div className="pack-row">
+      <span>📦 <b>{t('needsPackingTag')}</b></span>
+      <span className="grow" />
+      <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => set(true)}>✓ {t('markPacked')}</button>
+    </div>
   )
 }
 

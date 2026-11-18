@@ -130,6 +130,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         {order.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {orderedBy && <span className="muted">{t('orderedBy')}: {orderedBy}</span>}
+        {order.packed_at && <span className="tag tag-packed">📦 {t('packed')}{order.packed_by_name ? ` · ${order.packed_by_name}` : ''}</span>}
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
       {request && mode === 'view' && <DecideRequest request={request} order={order} products={products} onDone={onDone} />}

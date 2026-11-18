@@ -588,3 +588,9 @@ textarea { resize: vertical; }
 .line-gone td:last-child { text-decoration: none; }
 .btn-link.danger { color: var(--short); }
 .history-body .num .btn-link { margin-left: 8px; }
+
+/* packing (048) */
+.pack-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 8px 0; border-radius: var(--r-sm);
+  background: var(--kansui-soft); color: var(--kansui-ink); font-size: 14px; }
+.pack-row.is-packed { background: var(--ok-soft); color: var(--ok); }
+.tag-packed { background: var(--ok-soft); color: var(--ok); }
