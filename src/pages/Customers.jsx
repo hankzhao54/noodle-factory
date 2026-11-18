@@ -17,7 +17,7 @@ export default function Customers() {
       searchKeys={['name', 'contact_person', 'phone', 'address']}
       defaults={{ type: 'wholesale', active: true }}
       columns={[
-        { key: 'name', label: t('name'), render: r => <><b>{r.name}</b>{r.needs_packing && <span className="tag tag-packed" title={t('needsPacking')}> 📦</span>}</> },
+        { key: 'name', label: t('name'), render: r => <b>{r.name}</b> },
         { key: 'type', label: t('ctype'), render: r => <span className={`tag tag-${r.type}`}>{t(r.type)}</span> },
         { key: 'price_tier_id', label: t('priceTier'), render: r => tierName(r.price_tier_id) || <span className="muted">{t('basePrice')}</span> },
         { key: 'stores', label: t('stores'), render: r => {
@@ -40,7 +40,6 @@ export default function Customers() {
         { key: 'address', label: t('address'), span: 2 },
         { key: 'delivery_notes', label: t('deliveryNotes'), type: 'textarea', span: 2 },
         { key: 'delivery_weekdays', label: t('deliveryDays'), type: 'weekdays', span: 2, hint: t('deliveryDaysHint') },
-        { key: 'needs_packing', label: t('needsPacking'), type: 'bool', hint: t('needsPackingHint') },
         { key: 'ramen_lead_place_id', label: t('ramenLead') },
         { key: 'active', label: t('active'), type: 'bool' },
       ]}

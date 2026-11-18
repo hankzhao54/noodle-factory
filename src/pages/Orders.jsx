@@ -117,6 +117,10 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
       toast(t('orderDateChanged')); onDone()
     } catch (e) { toast(errText(e), 'error'); setBusy(false) }
   }
+  const markReady = async () => {
+    try { await q(db.rpc('set_order_packed', { p_order: order.id, p_packed: true })); toast(t('o_ready')); onDone() }
+    catch (e) { toast(errText(e), 'error') }
+  }
   const setStatus = async status => {
     try {
       await q(db.from('orders').update({ status }).eq('id', order.id))
@@ -130,7 +134,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         {order.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {orderedBy && <span className="muted">{t('orderedBy')}: {orderedBy}</span>}
-        {order.packed_at && <span className="tag tag-packed">📦 {t('packed')}{order.packed_by_name ? ` · ${order.packed_by_name}` : ''}</span>}
+        {order.packed_at && <span className="tag tag-packed">✓ {t('o_ready')} · {new Date(order.packed_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{order.packed_by_name ? ` · ${order.packed_by_name}` : ''}</span>}
         {order.store?.address && <span className="muted">{order.store.address}</span>}
       </div>
       {request && mode === 'view' && <DecideRequest request={request} order={order} products={products} onDone={onDone} />}
@@ -194,7 +198,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
               : <button className="btn btn-danger-quiet" onClick={() => setAskCancel(true)}>{t('cancelOrder')}</button>)}
           <span className="grow" />
           {order.status === 'submitted' && <button className="btn btn-primary" onClick={() => setStatus('confirmed')}>{t('confirm')}</button>}
-          {order.status === 'confirmed' && <button className="btn btn-primary" onClick={() => setStatus('ready')}>{t('markReady')}</button>}
+          {order.status === 'confirmed' && <button className="btn btn-primary" onClick={markReady}>{t('markReady')}</button>}
         </div>
       )}
     </Modal>

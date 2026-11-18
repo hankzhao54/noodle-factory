@@ -189,7 +189,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <span className="grow" />
         <Status value={o.status} prefix="o" />
       </header>
-      {(c.needs_packing || o.packed_at) && !delivered && <PackRow order={o} ctx={ctx} />}
+      {o.packed_at && !delivered && <PackRow order={o} ctx={ctx} />}
 
       <dl className="cust-info">
         {c.address && <div><dt>{t('address')}</dt><dd>
@@ -237,35 +237,39 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         {internal && !delivered && <span className="muted small">{t('confirmInApp')}</span>}
         <button className="btn btn-sm" onClick={() => ctx.printLabels([o])}>{t('printShipLabel')}</button>
         {!internal && <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
+        {!delivered && !o.packed_at && <ReadyButton order={o} ctx={ctx} />}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
     </article>
   )
 }
 
-/* ---------------- packing (customers that need their order packed) ---------------- */
-function PackRow({ order: o, ctx }) {
+/* ---------------- "goods ready" record for an order ---------------- */
+function useSetReady(o, ctx) {
   const t = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-  async function set(packed) {
+  async function set(ready) {
     setBusy(true)
-    try { await q(db.rpc('set_order_packed', { p_order: o.id, p_packed: packed })); toast(packed ? t('packedDone') : t('packedUndone')); ctx.reload() }
+    try { await q(db.rpc('set_order_packed', { p_order: o.id, p_packed: ready })); toast(ready ? t('readyDone') : t('readyUndone')); ctx.reload() }
     catch (e) { toast(errText(e), 'error') }
     setBusy(false)
   }
-  if (o.packed_at) return (
+  return [busy, set]
+}
+function ReadyButton({ order: o, ctx }) {
+  const t = useT()
+  const [busy, set] = useSetReady(o, ctx)
+  return <button className="btn btn-sm" disabled={busy} onClick={() => set(true)}>✓ {t('markReadyBtn')}</button>
+}
+function PackRow({ order: o, ctx }) {
+  const t = useT()
+  const [busy, set] = useSetReady(o, ctx)
+  return (
     <div className="pack-row is-packed">
-      <span>📦 ✓ <b>{t('packed')}</b> · {new Date(o.packed_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{o.packed_by_name ? ` · ${o.packed_by_name}` : ''}</span>
+      <span>✓ <b>{t('o_ready')}</b> · {new Date(o.packed_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{o.packed_by_name ? ` · ${o.packed_by_name}` : ''}</span>
       <span className="grow" />
       <button className="btn-link small" disabled={busy} onClick={() => set(false)}>{t('unpack')}</button>
-    </div>
-  )
-  return (
-    <div className="pack-row">
-      <span>📦 <b>{t('needsPackingTag')}</b></span>
-      <span className="grow" />
-      <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => set(true)}>✓ {t('markPacked')}</button>
     </div>
   )
 }

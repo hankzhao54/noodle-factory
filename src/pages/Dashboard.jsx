@@ -39,11 +39,7 @@ export default function Dashboard() {
     db.from('settings').select('value').eq('key', 'production_lookahead_days').maybeSingle()
       .then(({ data: v }) => { const n = Number(v?.value); if (n > 0 && n !== ahead) setAhead(n) })
     const changeReqs = await q(db.from('order_change_requests').select('id').eq('status', 'pending')).catch(() => [])
-    // orders of customers that need packing, due today or tomorrow, not packed yet
-    const toPack = await q(db.from('orders').select('id,delivery_date,customer:customers!inner(needs_packing)')
-      .eq('customer.needs_packing', true).in('status', ['submitted', 'confirmed']).is('packed_at', null)
-      .lte('delivery_date', tomorrow)).catch(() => [])
-    return { changeReqs, toPack, newOrders, tomorrowOrders, runs, low, batches, pos, pending, products, recipe, mstock, pstock, demand, lots, suppliers,
+    return { changeReqs, newOrders, tomorrowOrders, runs, low, batches, pos, pending, products, recipe, mstock, pstock, demand, lots, suppliers,
              warnDays: Number(warn?.value) || 14 }
   }, [isAdmin, tomorrow, until])
 
@@ -56,7 +52,6 @@ export default function Dashboard() {
     { n: data.newOrders.length, label: t('newOrders'), to: '/orders', urgent: true },
     { n: data.changeReqs.length, label: t('changeRequestsTodo'), to: '/orders', urgent: true },
     { n: data.pending.length, label: t('pendingAccounts'), to: '/users', urgent: true },
-    { n: data.toPack.length, label: t('toPackTodo'), to: '/deliveries' + (data.toPack.some(o => o.delivery_date <= todayISO()) ? '' : '?date=' + tomorrow), urgent: true },
     { n: openRuns, label: t('todayDeliveries'), to: '/deliveries' },
     // first days of the month: last month's report is ready
     ...(isAdmin && new Date().getDate() <= 5 ? [{ n: '📊', label: t('lastMonthReport'), to: '/monthly-report' }] : []),
