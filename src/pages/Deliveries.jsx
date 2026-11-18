@@ -21,15 +21,17 @@ export default function Deliveries() {
   // company details for the notes: load them now, not when printing starts (they would arrive too late)
   const info = usePublicInfo()
   const { data, loading, error, reload } = useData(async () => {
-    const [runs, orders, customers, products, stock, pinfo] = await Promise.all([
+    const [runs, orders, customers, products, stock, pinfo, earlier] = await Promise.all([
       q(db.from('deliveries').select('*').eq('delivery_date', date).order('created_at')),
       q(db.from('orders').select('*, order_lines(*), store:customer_locations(name,address,contact_person,phone,notes)').eq('delivery_date', date).neq('status', 'cancelled').order('created_at')),
       q(db.from('customers').select('*').order('name')),
       q(db.from('products').select('id,code,name_zh,name_en,name_hu,unit,base_price,active,sort').order('sort')),
       q(db.from('product_stock').select('id,on_hand,reserved')),
       q(db.rpc('product_info')).catch(() => ({})),
+      // not yet delivered orders of earlier days still need the same stock
+      q(db.from('orders').select('order_lines(product_id,qty)').lt('delivery_date', date).in('status', OPEN)),
     ])
-    return { runs, orders, customers, products, stock, pinfo: pinfo || {} }
+    return { runs, orders, customers, products, stock, pinfo: pinfo || {}, earlier }
   }, [date])
 
   useEffect(() => {
@@ -72,7 +74,20 @@ export default function Deliveries() {
     } catch (e) { if (e?.name !== 'AbortError') toast(errText(e), 'error') }
   }
   const isInternal = o => cust(o.customer_id)?.type === 'internal'
-  const ctx = { data, cust, shipTo, prod, reload, setModal, printLabels: printShipLabels, print: list => {
+  // stock check for the whole day: the stock is shared, so orders are served one after another
+  // (earlier days' open orders first); a line is short when what is left does not cover it
+  const left = Object.fromEntries(data.stock.map(s => [s.id, Number(s.on_hand)]))
+  for (const o of data.earlier) for (const l of o.order_lines) left[l.product_id] = (left[l.product_id] ?? 0) - Number(l.qty)
+  const dayNeed = {}, lineShort = {}
+  for (const o of data.orders.filter(o => OPEN.includes(o.status))) for (const l of o.order_lines) {
+    const have = left[l.product_id] ?? 0
+    dayNeed[l.product_id] = (dayNeed[l.product_id] || 0) + Number(l.qty)
+    if (have < Number(l.qty)) lineShort[l.id] = { have: Math.max(0, have), missing: Number(l.qty) - Math.max(0, have) }
+    left[l.product_id] = have - Number(l.qty)
+  }
+  const dayShort = Object.keys(dayNeed).filter(pid => (left[pid] ?? 0) < -0.0005)
+    .map(pid => ({ p: prod(pid), need: dayNeed[pid], missing: -left[pid] }))
+  const ctx = { data, cust, shipTo, prod, reload, setModal, lineShort, printLabels: printShipLabels, print: list => {
     // own restaurants get no delivery note (they confirm receipt in the app; a label is enough)
     const notes = list.filter(o => !isInternal(o))
     if (notes.length) setPrintList(notes); else toast(t('noNoteInternal'))
@@ -98,6 +113,9 @@ export default function Deliveries() {
           {data.orders.some(o => !isInternal(o)) && <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAllNotes')}</button>}
           {data.orders.some(isInternal) && <button className="btn btn-sm" onClick={() => printShipLabels(data.orders.filter(isInternal))}>{t('printInternalLabels')}</button>}
         </p>
+      )}
+      {dayShort.length > 0 && (
+        <p className="note-box short-box">⚠ {t('dayShort')}: {dayShort.map(x => `${t.pick(x.p)} ${t('need')} ${fmtNum(x.need, t.lang)} · ${t('shortBy')} ${fmtNum(Math.round(x.missing * 10) / 10, t.lang)} ${x.p.unit || 'kg'}`).join(' ； ')}</p>
       )}
 
       {data.orders.length === 0 && data.runs.length === 0 ? (
@@ -178,7 +196,6 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
   const delivered = o.status === 'delivered'
   const internal = c.type === 'internal'
   const total = o.order_lines.reduce((s, l) => s + Number(delivered ? l.delivered_qty ?? l.qty : l.qty) * Number(l.unit_price || 0), 0)
-  const stockOf = pid => ctx.data.stock.find(s => s.id === pid)
 
   return (
     <article className={`stop-card ${delivered ? 'is-done' : ''}`}>
@@ -207,8 +224,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
       <table className="stop-items">
         <tbody>{o.order_lines.map(l => {
           const p = ctx.prod(l.product_id)
-          const s = stockOf(l.product_id)
-          const short = !delivered && s && Number(s.on_hand) < Number(l.qty)
+          const sh = !delivered && ctx.lineShort[l.id]
           return (
             <tr key={l.id}>
               <td>{t.pick(p)}</td>
@@ -218,7 +234,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
                   : <b>{fmtNum(l.qty, t.lang)}</b>}
                 <span className="unit">{p.unit}</span>
               </td>
-              {short && <td><span className="tag tag-low" title={t('inStock') + ': ' + fmtNum(s.on_hand, t.lang)}>{t('notEnoughStock')}</span></td>}
+              {sh && <td><span className="tag tag-low" title={t('shortBy') + ': ' + fmtNum(Math.round(sh.missing * 10) / 10, t.lang)}>{t('notEnoughStock')} −{fmtNum(Math.round(sh.missing * 10) / 10, t.lang)}</span></td>}
             </tr>
           )
         })}</tbody>
@@ -425,8 +441,8 @@ function SplitDialog({ order: o, ctx, onClose }) {
   const stockOf = pid => ctx.data.stock.find(s => s.id === pid)
   // prefill: what the stock covers now, the rest later
   const [now, setNow] = useState(() => Object.fromEntries(o.order_lines.map(l => {
-    const s = stockOf(l.product_id); const q0 = Number(l.qty)
-    return [l.id, s && Number(s.on_hand) < q0 ? Math.max(0, Math.floor(Number(s.on_hand) * 10) / 10) : q0]
+    const sh = ctx.lineShort[l.id]; const q0 = Number(l.qty)
+    return [l.id, sh ? Math.max(0, Math.floor(sh.have * 10) / 10) : q0]
   })))
   const [date, setDate] = useState(todayISO(1) > o.delivery_date ? todayISO(1) : (() => {
     const d = new Date(o.delivery_date + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10)
@@ -439,7 +455,7 @@ function SplitDialog({ order: o, ctx, onClose }) {
   async function submit(e) {
     e.preventDefault()
     if (!anyLater) return toast(t('splitNothing'), 'error')
-    if (!anyNow) return toast(t('splitKeepOne'), 'error')
+    if (!anyNow) return toast(t('splitKeepNow'), 'error')
     setBusy(true)
     try {
       await q(db.rpc('split_order_qty', {
@@ -459,7 +475,7 @@ function SplitDialog({ order: o, ctx, onClose }) {
           <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('inStock')}</th><th className="num">{t('deliverNow')}</th><th className="num">{t('deliverLater')}</th></tr></thead>
           <tbody>{o.order_lines.map(l => {
             const p = ctx.prod(l.product_id); const s = stockOf(l.product_id)
-            const short = s && Number(s.on_hand) < Number(l.qty)
+            const short = !!ctx.lineShort[l.id]
             return (
               <tr key={l.id}>
                 <td>{t.pick(p)}</td>

@@ -595,3 +595,4 @@ textarea { resize: vertical; }
 .pack-row.is-packed { background: var(--ok-soft); color: var(--ok); }
 .tag-packed { background: var(--ok-soft); color: var(--ok); }
 .text-short { color: var(--short); font-weight: 600; }
+.short-box { background: var(--short-soft); color: var(--short); }
