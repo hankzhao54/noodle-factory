@@ -455,9 +455,13 @@ function SplitDialog({ order: o, ctx, onClose }) {
   async function submit(e) {
     e.preventDefault()
     if (!anyLater) return toast(t('splitNothing'), 'error')
-    if (!anyNow) return toast(t('splitKeepNow'), 'error')
     setBusy(true)
     try {
+      // nothing goes out now: move the whole order to the later day
+      if (!anyNow) {
+        await q(db.rpc('change_order_date', { p_order: o.id, p_date: date }))
+        toast(t('movedWhole')); onClose(); ctx.reload(); return
+      }
       await q(db.rpc('split_order_qty', {
         p_order: o.id,
         p_items: o.order_lines.filter(l => later(l) > 0).map(l => ({ line_id: l.id, qty: later(l) })),
@@ -491,7 +495,7 @@ function SplitDialog({ order: o, ctx, onClose }) {
         <Field label={t('deliverLaterOn')}><input type="date" required min={todayISO()} value={date} onChange={e => setDate(e.target.value)} /></Field>
         <div className="modal-foot"><span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
-          <button className="btn btn-primary" disabled={busy || !anyLater || !anyNow}>✂️ {t('splitLaterBtn')}</button>
+          <button className="btn btn-primary" disabled={busy || !anyLater}>{anyNow ? `✂️ ${t('splitLaterBtn')}` : `📅 ${t('moveWholeBtn')}`}</button>
         </div>
       </form>
     </Modal>
