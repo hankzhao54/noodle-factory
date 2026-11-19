@@ -126,10 +126,40 @@ export function PageHead({ title, children }) {
 }
 
 // controlled number input that allows empty while typing
-export function NumInput({ value, onChange, ...rest }) {
+export function NumInput({ value, onChange, onBlur, min, max, step, ...rest }) {
+  // Text field with a decimal keyboard instead of type="number": a controlled number input loses the
+  // "." while typing "9." (and iPhones with a Hungarian keyboard type "," which a number input rejects).
+  // Accepts both "," and "."; the parent always gets a number (or null when empty).
+  const show = v => (v === null || v === undefined || Number.isNaN(v) ? '' : String(v))
+  const [text, setText] = useState(show(value))
+  const last = useRef(value)
+  useEffect(() => {
+    // only an outside change resets the text (null and 0 count as the same, e.g. an empty quantity)
+    if (Number(value ?? 0) !== Number(last.current ?? 0)) {
+      last.current = value; setText(show(value))
+    }
+  }, [value])
+  const neg = min === undefined || Number(min) < 0
+  function change(e) {
+    let raw = e.target.value.replace(/\s/g, '').replace(',', '.')
+    raw = raw.replace(neg ? /[^\d.-]/g : /[^\d.]/g, '')
+    if (!/^-?\d*\.?\d*$/.test(raw)) return          // ignore a second separator etc.
+    setText(e.target.value.replace(/[^\d.,-]/g, ''))
+    const n = raw === '' || raw === '-' || raw === '.' || raw === '-.' ? null : Number(raw)
+    last.current = n
+    onChange(n)
+  }
   return (
-    <input type="number" inputMode="decimal" step="any" {...rest}
-      value={value ?? ''} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))} />
+    <input type="text" inputMode="decimal" autoComplete="off" {...rest}
+      value={text} onChange={change}
+      onBlur={e => {
+        // keep within min / max (a text field has no built-in range check)
+        let n = last.current
+        if (n != null && min !== undefined && n < Number(min)) n = Number(min)
+        if (n != null && max !== undefined && n > Number(max)) n = Number(max)
+        if (n !== last.current) { last.current = n; onChange(n) }
+        setText(show(n)); onBlur?.(e)
+      }} />
   )
 }
 

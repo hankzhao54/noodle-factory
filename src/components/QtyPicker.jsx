@@ -1,5 +1,6 @@
 import { useT, fmtFt, fmtNum } from '../lib/i18n'
 import ImageThumb from './ImageThumb'
+import { NumInput } from './ui'
 import { allergenName } from './LabelPrint'
 
 // product rows with − / + steppers. items: [{id, name_*, unit, price, min_order_qty, pack_size_g}]
@@ -32,8 +33,8 @@ export default function QtyPicker({ items, qty, setQty, info, producer }) {
             </div>
             <div className="stepper">
               <button type="button" aria-label="−" disabled={!v} onClick={() => set(p.id, v - step < min ? 0 : v - step)}>−</button>
-              <input type="number" inputMode="decimal" step="any" min="0" aria-label={`${t.pick(p)} ${t('qty')}`}
-                value={v || ''} placeholder="0" onChange={e => set(p.id, Number(e.target.value))} />
+              <NumInput min={0} aria-label={`${t.pick(p)} ${t('qty')}`}
+                value={v || null} placeholder="0" onChange={n => set(p.id, n || 0)} />
               <button type="button" aria-label="+" onClick={() => set(p.id, Math.max(v + step, min))}>+</button>
               <span className="unit">{p.unit}</span>
             </div>
