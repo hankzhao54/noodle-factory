@@ -57,6 +57,9 @@ export default function Deliveries() {
     { run: null, orders: data.orders.filter(o => !o.delivery_id || !run(o.delivery_id)) },
     ...data.runs.map(r => ({ run: r, orders: data.orders.filter(o => o.delivery_id === r.id) })),
   ].filter(g => g.run || g.orders.length)
+  // not yet delivered on top, delivered (and cancelled) at the bottom; otherwise keep the order
+  const rank = o => (o.status === 'delivered' || o.status === 'cancelled' ? 1 : 0)
+  for (const g of groups) g.orders = g.orders.map((o, i) => [o, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0])
   const done = data.orders.filter(o => o.status === 'delivered').length
   // shipping label (label printer, same paper as all other labels): one per order
   async function printShipLabels(list) {
