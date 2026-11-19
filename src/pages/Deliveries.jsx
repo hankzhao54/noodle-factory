@@ -79,10 +79,14 @@ export default function Deliveries() {
   const left = Object.fromEntries(data.stock.map(s => [s.id, Number(s.on_hand)]))
   for (const o of data.earlier) for (const l of o.order_lines) left[l.product_id] = (left[l.product_id] ?? 0) - Number(l.qty)
   const dayNeed = {}, lineShort = {}
-  for (const o of data.orders.filter(o => OPEN.includes(o.status))) for (const l of o.order_lines) {
+  // orders already marked ready have their goods set aside: they take stock first and never show a shortage
+  const openToday = data.orders.filter(o => OPEN.includes(o.status))
+  const byReady = [...openToday.filter(o => o.status === 'ready' || o.packed_at), ...openToday.filter(o => !(o.status === 'ready' || o.packed_at))]
+  for (const o of byReady) for (const l of o.order_lines) {
     const have = left[l.product_id] ?? 0
     dayNeed[l.product_id] = (dayNeed[l.product_id] || 0) + Number(l.qty)
-    if (have < Number(l.qty)) lineShort[l.id] = { have: Math.max(0, have), missing: Number(l.qty) - Math.max(0, have) }
+    const setAside = o.status === 'ready' || o.packed_at
+    if (have < Number(l.qty) && !setAside) lineShort[l.id] = { have: Math.max(0, have), missing: Number(l.qty) - Math.max(0, have) }
     left[l.product_id] = have - Number(l.qty)
   }
   const dayShort = Object.keys(dayNeed).filter(pid => (left[pid] ?? 0) < -0.0005)
