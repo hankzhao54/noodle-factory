@@ -34,26 +34,45 @@ export default function MonthlyReport() {
     window.print()
   }
 
-  function csv() {
-    const rows = [[t('reportMonth'), r.month], []]
-    rows.push([t('rpSalesByProduct')], [t('name'), t('qty'), t('rpInternal'), t('rpExternal'), t('rpNetValue')])
-    r.sales_by_product.forEach(x => rows.push([x.name, num(x.qty), num(x.internal_qty), num(x.external_qty), num(x.value)]))
-    rows.push([], [t('rpSalesByCustomer')], [t('customer'), t('rpOrders'), t('qty'), t('rpNetValue')])
-    r.sales_by_customer.forEach(x => rows.push([x.name, x.orders, num(x.qty), num(x.value)]))
-    const m = storeMatrix(r.sales_by_store_product)
-    if (m.stores.length) {
-      rows.push([], [t('rpByStoreProduct') + ' (kg)'], [t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue')])
-      m.stores.forEach(s => rows.push([s.name, ...m.prods.map(p => num(s.q[p.id] || 0)), num(s.total), Math.round(s.value)]))
-      rows.push([t('total'), ...m.prods.map(p => num(m.totals[p.id])), num(m.stores.reduce((a, s) => a + s.total, 0)), Math.round(m.stores.reduce((a, s) => a + s.value, 0))])
+  // real Excel file (one sheet per table), loaded only when clicked
+  async function excel() {
+    const { default: ExcelJS } = await import('exceljs')
+    const wb = new ExcelJS.Workbook()
+    const kgF = '#,##0.0', ftF = '#,##0" Ft"', n3 = '#,##0.###'
+    function sheet(name, head, rows, formats = [], totalRow) {
+      const ws = wb.addWorksheet(name.slice(0, 31))
+      ws.addRow([`${t('nav_monthReport')} · ${r.month}`]).font = { bold: true, size: 13 }
+      ws.addRow([])
+      const h = ws.addRow(head); h.font = { bold: true }; h.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF2F3' } } })
+      rows.forEach(row => ws.addRow(row))
+      if (totalRow) ws.addRow(totalRow).font = { bold: true }
+      head.forEach((_, i) => { const col = ws.getColumn(i + 1); col.width = i ? 14 : 30; if (formats[i]) col.numFmt = formats[i] })
+      ws.views = [{ state: 'frozen', ySplit: 3, xSplit: 1 }]
+      return ws
     }
-    rows.push([], [t('nav_production')], [t('name'), t('batches'), t('rpActual'), t('rpRecipe'), t('rpLoss')])
-    r.production.forEach(x => rows.push([x.name, num(x.batches), num(x.actual), num(x.theoretical), x.loss_pct ?? '']))
-    rows.push([], [t('rpMaterials')], [t('name'), t('rpUsed'), t('rpBought'), t('rpAdjusted'), t('rpEndStock'), t('unit'), t('rpEndValue')])
-    r.materials.forEach(x => rows.push([x.name, num(x.used), num(x.bought), num(x.adjusted), num(x.end_stock), x.unit, Math.round(num(x.end_value))]))
-    const text = rows.map(row => row.map(c => /[;"\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : c).join(';')).join('\r\n')
+    sheet(t('rpSummary'), [t('name'), t('qty')], [
+      [t('rpDelivered') + ' (kg)', k.soldQty], [t('rpOrders'), r.orders.delivered], [t('rpExtSales') + ' (Ft)', k.sales],
+      [t('rpMade') + ' (kg)', k.made], [t('rpLoss') + ' %', k.loss != null ? Math.round(k.loss * 10) / 10 : ''],
+      [t('rpMatCost') + ' (Ft)', Math.round(k.matCost)], [t('rpBoughtValue') + ' (Ft)', Math.round(k.bought)], [t('rpStockValue') + ' (Ft)', Math.round(k.stockValue)],
+    ], [null, '#,##0.##'])
+    const m = storeMatrix(r.sales_by_store_product)
+    if (m.stores.length) sheet(t('rpByStoreProduct'), [t('customer'), ...m.prods.map(p => p.name + ' (kg)'), t('total') + ' (kg)', t('rpNetValue')],
+      m.stores.map(s => [s.name, ...m.prods.map(p => s.q[p.id] || null), s.total, s.value || null]),
+      [null, ...m.prods.map(() => kgF), kgF, ftF],
+      [t('total'), ...m.prods.map(p => m.totals[p.id]), m.stores.reduce((a, s) => a + s.total, 0), m.stores.reduce((a, s) => a + s.value, 0)])
+    sheet(t('rpSalesByCustomer'), [t('customer'), t('rpOrders'), t('qty') + ' (kg)', t('rpNetValue')],
+      r.sales_by_customer.map(x => [x.name, x.orders, num(x.qty), num(x.value) || null]), [null, null, kgF, ftF])
+    sheet(t('rpSalesByProduct'), [t('name'), t('rpInternal') + ' (kg)', t('rpExternal') + ' (kg)', t('qty') + ' (kg)', t('rpNetValue')],
+      r.sales_by_product.map(x => [x.name, num(x.internal_qty) || null, num(x.external_qty) || null, num(x.qty), num(x.value) || null]), [null, kgF, kgF, kgF, ftF])
+    sheet(t('nav_production'), [t('name'), t('batches'), t('rpActual') + ' (kg)', t('rpRecipe') + ' (kg)', t('rpLoss') + ' %'],
+      r.production.map(x => [x.name, num(x.batches), num(x.actual), num(x.theoretical), x.loss_pct != null ? num(x.loss_pct) : null]), [null, '#,##0.##', kgF, kgF, '0.0'])
+    sheet(t('rpMaterials'), [t('name'), t('unit'), t('rpUsed'), t('rpBought'), t('rpAdjusted'), t('rpEndStock'), t('rpEndValue')],
+      r.materials.map(x => [x.name, x.unit, num(x.used), num(x.bought), num(x.adjusted), num(x.end_stock), Math.round(num(x.end_value))]), [null, null, n3, n3, n3, n3, ftF])
+    sheet(t('rpProductsEnd'), [t('name'), t('rpEndStock')], r.products.map(x => [x.name + ` (${x.unit || 'kg'})`, num(x.end_stock)]), [null, n3])
+    const buf = await wb.xlsx.writeBuffer()
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
-    a.download = `teszta-havi-jelentes-${r.month}.csv`; a.click()
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    a.download = `teszta-havi-jelentes-${r.month}.xlsx`; a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 5000)
   }
 
@@ -63,7 +82,7 @@ export default function MonthlyReport() {
         <label className="inline-field">{t('reportMonth')}
           <input type="month" value={month} max={todayISO().slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)} /></label>
         {r && <button className="btn" onClick={printReport}>{t('print')}</button>}
-        {r && <button className="btn" onClick={csv}>CSV / Excel</button>}
+        {r && <button className="btn" onClick={() => excel().catch(e => alert(e.message))}>⬇ Excel</button>}
       </PageHead>
       <ErrorBox error={error} />
       {!r ? !error && <Loading /> : (<>

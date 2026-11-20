@@ -716,6 +716,7 @@ const D = {
   actualSaved: ['实际产量已更新，库存已跟着改', 'Actual yield updated, stock adjusted', 'Tényleges mennyiség frissítve, készlet módosítva'],
   madeBy: ['谁做的', 'Made by', 'Készítette'],
   rpByStoreProduct: ['每个店 × 产品', 'Per restaurant / store × product', 'Éttermenként / üzletenként × termék'],
+  rpSummary: ['汇总', 'Summary', 'Összesítő'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

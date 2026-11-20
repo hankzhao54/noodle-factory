@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { downloadXlsx } from '../lib/excel'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtFt } from '../lib/i18n'
@@ -9,7 +10,7 @@ import { useAuth } from '../lib/auth'
 const monthStart = () => todayISO(0).slice(0, 8) + '01'
 const endOfDay = iso => iso + 'T23:59:59.999'
 
-// Simple management reports for a date range; every table can be downloaded as CSV.
+// Simple management reports for a date range; every table can be downloaded as an Excel file.
 export default function Reports() {
   const t = useT()
   const { isAdmin } = useAuth()
@@ -178,16 +179,10 @@ function Kpi({ label, value, sub }) {
 function Section({ title, note, head, rows, bars, barCol, file }) {
   const t = useT()
   const max = bars?.length ? Math.max(...bars, 0) : 0
-  function csv() {
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const text = '﻿' + [head, ...rows].map(r => r.map(esc).join(';')).join('\r\n')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
-    a.download = `${file}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-  }
+  const toExcel = () => downloadXlsx(file, [{ name: title, title, head, rows }], t.lang).catch(e => alert(e.message))
   return (
     <section className="panel">
-      <div className="panel-head"><h2>{title}</h2>{rows.length > 0 && <button type="button" className="btn btn-sm btn-quiet" onClick={csv}>CSV ↓</button>}</div>
+      <div className="panel-head"><h2>{title}</h2>{rows.length > 0 && <button type="button" className="btn btn-sm btn-quiet" onClick={toExcel}>Excel ↓</button>}</div>
       {note && <p className="muted small pad-x">{note}</p>}
       {rows.length === 0 ? <Empty>{t('noDataRange')}</Empty> : (
         <div className="table-wrap"><table className="table">
