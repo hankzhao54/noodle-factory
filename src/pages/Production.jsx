@@ -126,7 +126,7 @@ export default function Production() {
                 <td><b>{t.pick(p)}</b></td>
                 <td className="num">{fmtNum(b.batches, t.lang)}</td>
                 <td className="num muted">{fmtNum(b.batches * expYield(p), t.lang)} {p.unit}</td>
-                <td className="num">{b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–'}</td>
+                <td className="num">{b.status === 'done' ? <EditActual batch={b} unit={p.unit} onDone={reload} /> : (b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–')}</td>
                 <td className="num"><LossTag batch={b} product={p} /></td>
                 <td className="muted">{b.lot_no ? <Link to={`/trace/${encodeURIComponent(b.lot_no)}`}>{b.lot_no}</Link> : '–'}</td>
                 <td><Status value={b.status} prefix="b" /></td>
@@ -223,4 +223,34 @@ function LossTag({ batch, product }) {
   if (l == null) return '–'
   const high = l > Number(product.loss_pct || 0) + 2
   return <span className={high ? 'tag tag-low' : 'muted'} title={t('lossVsTheo')}>{fmtNum(l, t.lang, 1)}%</span>
+}
+
+/* actual yield of a finished batch can be corrected afterwards (weighed later) */
+function EditActual({ batch: b, unit, onDone }) {
+  const t = useT()
+  const toast = useToast()
+  const [v, setV] = useState(null)   // null = not editing
+  const [busy, setBusy] = useState(false)
+  async function save(e) {
+    e?.preventDefault()
+    if (v == null || Number(v) === Number(b.actual_qty)) { setV(null); return }
+    setBusy(true)
+    try { await q(db.rpc('set_batch_actual', { p_batch: b.id, p_qty: v })); toast(t('actualSaved')); setV(null); onDone() }
+    catch (err) { toast(errText(err), 'error') }
+    setBusy(false)
+  }
+  if (v == null) return (
+    <button className="btn-link edit-actual" title={t('editActualHint')} onClick={() => setV(Number(b.actual_qty ?? 0))}>
+      {b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–'} <span aria-hidden>✎</span>
+    </button>
+  )
+  return (
+    <form className="edit-actual-form" onSubmit={save}>
+      <NumInput className="input-sm" min={0} autoFocus value={v} onChange={setV} aria-label={t('actualQty')}
+        onKeyDown={e => e.key === 'Escape' && setV(null)} />
+      <span className="muted small">{unit}</span>
+      <button className="btn btn-sm btn-primary" disabled={busy}>✓</button>
+      <button type="button" className="btn btn-quiet btn-sm" onClick={() => setV(null)}>✕</button>
+    </form>
+  )
 }

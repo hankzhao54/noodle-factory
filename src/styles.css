@@ -596,3 +596,8 @@ textarea { resize: vertical; }
 .tag-packed { background: var(--ok-soft); color: var(--ok); }
 .text-short { color: var(--short); font-weight: 600; }
 .short-box { background: var(--short-soft); color: var(--short); }
+.edit-actual { font-variant-numeric: tabular-nums; color: inherit; text-decoration: none; }
+.edit-actual span { opacity: .45; font-size: .85em; margin-left: 2px; }
+.edit-actual:hover span { opacity: 1; }
+.edit-actual-form { display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.edit-actual-form input { width: 80px; text-align: right; }
