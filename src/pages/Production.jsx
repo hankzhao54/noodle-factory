@@ -32,7 +32,10 @@ export default function Production() {
       q(db.from('production_demand').select('*').lte('delivery_date', date)),
       q(db.from('production_batches').select('*').order('planned_date', { ascending: false }).order('created_at', { ascending: false }).limit(200)),
     ])
-    return { products, recipe, mstock, pstock, demand, batches }
+    // who finished each batch (planned ones: who planned it)
+    const ids = [...new Set(batches.flatMap(b => [b.done_by, b.created_by]).filter(Boolean))]
+    const names = ids.length ? (await q(db.rpc('staff_user_names', { p_ids: ids })).catch(() => ({}))) || {} : {}
+    return { products, recipe, mstock, pstock, demand, batches, names }
   }, [date])
 
   if (loading && !data) return <div className="page"><Loading /></div>
@@ -116,7 +119,7 @@ export default function Production() {
       {shown.length === 0 ? <Empty /> : (
         <div className="table-wrap"><table className="table">
           <thead><tr><th>#</th><th>{t('date')}</th><th>{t('name')}</th><th className="num">{t('batches')}</th>
-            <th className="num">{t('expectedQty')}</th><th className="num">{t('actualQty')}</th><th className="num">{t('lossCol')}</th><th>{t('lot')}</th><th>{t('status')}</th><th /></tr></thead>
+            <th className="num">{t('expectedQty')}</th><th className="num">{t('actualQty')}</th><th className="num">{t('lossCol')}</th><th>{t('lot')}</th><th>{t('madeBy')}</th><th>{t('status')}</th><th /></tr></thead>
           <tbody>{shown.map(b => {
             const p = prod(b.product_id)
             return (
@@ -129,6 +132,7 @@ export default function Production() {
                 <td className="num">{b.status === 'done' ? <EditActual batch={b} unit={p.unit} onDone={reload} /> : (b.actual_qty != null ? fmtNum(b.actual_qty, t.lang) : '–')}</td>
                 <td className="num"><LossTag batch={b} product={p} /></td>
                 <td className="muted">{b.lot_no ? <Link to={`/trace/${encodeURIComponent(b.lot_no)}`}>{b.lot_no}</Link> : '–'}</td>
+                <td>{b.status === 'done' ? (data.names[b.done_by] || '–') : <span className="muted">{data.names[b.created_by] || '–'}</span>}</td>
                 <td><Status value={b.status} prefix="b" /></td>
                 <td className="act">{b.status === 'done' && <>
                   {isAdmin && (undoAsk === b.id

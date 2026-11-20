@@ -714,6 +714,7 @@ const D = {
   movedWhole: ['整单已改到补送日期', 'Whole order moved to the new day', 'Az egész rendelés áthelyezve'],
   editActualHint: ['点一下改实际产量（比如忘了称重，后来补称）', 'Click to correct the actual yield (e.g. weighed later)', 'Kattints a tényleges mennyiség javításához (pl. utólag mérve)'],
   actualSaved: ['实际产量已更新，库存已跟着改', 'Actual yield updated, stock adjusted', 'Tényleges mennyiség frissítve, készlet módosítva'],
+  madeBy: ['谁做的', 'Made by', 'Készítette'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

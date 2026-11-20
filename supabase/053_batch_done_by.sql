@@ -2,7 +2,6 @@
 -- 053 · 生产列表显示谁做的：记录完成生产的人
 --   production_batches.done_by is set when a batch goes planned → done (cleared on undo).
 --   Older batches are filled from who booked their stock entry.
---   (NOT YET APPLIED to the live database — waiting for the user to approve the migration)
 -- =====================================================================
 alter table noodle.production_batches add column if not exists done_by uuid;
 
