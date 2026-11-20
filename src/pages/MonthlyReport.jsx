@@ -16,6 +16,8 @@ export default function MonthlyReport() {
   const [month, setMonth] = useState(() => new Date().getDate() <= 5 ? lastMonth() : todayISO().slice(0, 7))
   const { data: r, error } = useData(() => q(db.rpc('monthly_report', { p_month: month + '-01' })), [month])
   const [invFor, setInvFor] = useState(null)
+  // Excel, printing and invoices only once the month is over (from its last day): before that the numbers still change
+  const closed = !!r && todayISO() >= r.to
   // invoices already generated for this month (latest per customer / store)
   const inv = useData(() => q(db.from('invoices').select('id,number,customer_id,location_id,issue_date,gross,file_path,created_at')
     .eq('month', month + '-01').order('created_at', { ascending: false })), [month])
@@ -90,12 +92,13 @@ export default function MonthlyReport() {
       <PageHead title={t('nav_monthReport')}>
         <label className="inline-field">{t('reportMonth')}
           <input type="month" value={month} max={todayISO().slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)} /></label>
-        {r && <button className="btn" onClick={printReport}>{t('print')}</button>}
-        {r && <button className="btn" onClick={() => excel().catch(e => alert(e.message))}>⬇ Excel</button>}
+        {r && <button className="btn" disabled={!closed} title={closed ? '' : t('invAfterMonth')} onClick={printReport}>{t('print')}</button>}
+        {r && <button className="btn" disabled={!closed} title={closed ? '' : t('invAfterMonth')} onClick={() => excel().catch(e => alert(e.message))}>⬇ Excel</button>}
       </PageHead>
       <ErrorBox error={error} />
       {!r ? !error && <Loading /> : (<>
-        <p className="muted small">{r.from} – {r.to}{month === todayISO().slice(0, 7) ? ` · ${t('rpMonthRunning')}` : ''}</p>
+        <p className="muted small">{r.from} – {r.to}</p>
+        {!closed && <p className="note-box">🔒 {t('rpLocked', { d: fmtDate(r.to, t.lang) })}</p>}
 
         <div className="kpi-grid">
           <Kpi label={t('rpDelivered')} value={`${fmtNum(k.soldQty, t.lang)} kg`} sub={t('rpOrdersN', { n: r.orders.delivered })} />
@@ -119,11 +122,12 @@ export default function MonthlyReport() {
                 ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–',
                 s.customer_id ? (() => {
                   const x = latestInv[invKey(s.customer_id, s.location_id)]
-                  if (!x) return <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
+                  if (!x) return closed ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
+                    : <span className="muted small no-print">🔒 {t('invAfterMonth')}</span>
                   return <span className="inv-done no-print">
                     <button className="btn-link" title={t('invOpen')} onClick={() => openInvoice(x).catch(e => alert(e.message))}>✓ {x.number}</button>
                     <span className="muted small"> · {fmtDate(x.issue_date, t.lang)}</span>
-                    <button className="btn-link small" onClick={() => setInvFor(s)}>{t('invRedo')}</button>
+                    {closed && <button className="btn-link small" onClick={() => setInvFor(s)}>{t('invRedo')}</button>}
                   </span>
                 })() : '']),
               [<b>{t('total')}</b>, ...m.prods.map(p => <b>{kg(m.totals[p.id], t)}</b>), <b>{kg(m.stores.reduce((a, s) => a + s.total, 0), t)}</b>,

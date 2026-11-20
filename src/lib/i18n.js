@@ -735,6 +735,8 @@ const D = {
   invRedo: ['重新生成', 'Make again', 'Újra'],
   invSaved: ['发票已生成并保存', 'Invoice generated and saved', 'Díjbekérő elkészült és mentve'],
   invHistory: ['已生成过：', 'Generated before:', 'Korábban kiállítva:'],
+  rpLocked: ['这个月还没结束，下面只是预览，数字还会变。到月底（{d}）才能打印、导出 Excel 和开发票。', 'This month is not over yet: this is a preview and the figures will still change. Printing, Excel and invoices open on the last day of the month ({d}).', 'A hónap még nem zárult le: ez csak előnézet, a számok még változnak. Nyomtatás, Excel és díjbekérő a hónap utolsó napjától ({d}).'],
+  invAfterMonth: ['月底后可用', 'available at month end', 'hónap végén'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
