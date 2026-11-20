@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { db, q, todayISO } from '../lib/supabase'
+import { db, q, todayISO, supabase } from '../lib/supabase'
 import { useData } from '../lib/useData'
-import { useT, fmtNum, fmtFt } from '../lib/i18n'
+import { useT, fmtNum, fmtFt, fmtDate } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, Modal, Field, NumInput, useToast, errText } from '../components/ui'
 import { invoiceHtml, invoicePdfBlob } from '../lib/invoicePdf'
 import { deliverPdf } from '../lib/labelOutput'
@@ -16,6 +16,12 @@ export default function MonthlyReport() {
   const [month, setMonth] = useState(() => new Date().getDate() <= 5 ? lastMonth() : todayISO().slice(0, 7))
   const { data: r, error } = useData(() => q(db.rpc('monthly_report', { p_month: month + '-01' })), [month])
   const [invFor, setInvFor] = useState(null)
+  // invoices already generated for this month (latest per customer / store)
+  const inv = useData(() => q(db.from('invoices').select('id,number,customer_id,location_id,issue_date,gross,file_path,created_at')
+    .eq('month', month + '-01').order('created_at', { ascending: false })), [month])
+  const invKey = (c, l) => c + '|' + (l || '')
+  const latestInv = {}, invCount = {}
+  for (const x of inv.data || []) { const k = invKey(x.customer_id, x.location_id); latestInv[k] = latestInv[k] || x; invCount[k] = (invCount[k] || 0) + 1 }
 
   const k = r && (() => {
     const soldQty = r.sales_by_product.reduce((s, x) => s + num(x.qty), 0)
@@ -111,7 +117,15 @@ export default function MonthlyReport() {
           return <Section title={t('rpByStoreProduct')} head={[t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue'), '']}
             rows={[...m.stores.map(s => [<>{s.name}{s.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>,
                 ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–',
-                s.customer_id ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button> : '']),
+                s.customer_id ? (() => {
+                  const x = latestInv[invKey(s.customer_id, s.location_id)]
+                  if (!x) return <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
+                  return <span className="inv-done no-print">
+                    <button className="btn-link" title={t('invOpen')} onClick={() => openInvoice(x).catch(e => alert(e.message))}>✓ {x.number}</button>
+                    <span className="muted small"> · {fmtDate(x.issue_date, t.lang)}</span>
+                    <button className="btn-link small" onClick={() => setInvFor(s)}>{t('invRedo')}</button>
+                  </span>
+                })() : '']),
               [<b>{t('total')}</b>, ...m.prods.map(p => <b>{kg(m.totals[p.id], t)}</b>), <b>{kg(m.stores.reduce((a, s) => a + s.total, 0), t)}</b>,
                 <b>{fmtFt(m.stores.reduce((a, s) => a + s.value, 0))}</b>, '']]} />
         })()}
@@ -123,7 +137,9 @@ export default function MonthlyReport() {
         <Section title={t('rpProductsEnd')} head={[t('name'), t('rpEndStock')]}
           rows={r.products.map(x => [x.name, qu(x.end_stock, x.unit, t)])} />
         <p className="muted small">{t('rpNotes')}</p>
-        {invFor && <InvoiceDialog store={invFor} month={r.month} from={r.from} to={r.to} onClose={() => setInvFor(null)} />}
+        {invFor && <InvoiceDialog store={invFor} month={r.month} from={r.from} to={r.to} onClose={() => setInvFor(null)}
+          history={(inv.data || []).filter(x => invKey(x.customer_id, x.location_id) === invKey(invFor.customer_id, invFor.location_id))}
+          onSaved={() => inv.reload()} />}
       </>)}
     </div>
   )
@@ -165,8 +181,14 @@ function Section({ title, head, rows }) {
 }
 
 /* ---------------- monthly invoice draft (díjbekérő PDF) for one customer / store ---------------- */
+const INV_BUCKET = 'noodle-invoices'
+async function openInvoice(x) {
+  const { data, error } = await supabase.storage.from(INV_BUCKET).download(x.file_path)
+  if (error) throw error
+  deliverPdf(data, x.number)
+}
 const INV_KEYS = ['company_name', 'company_address', 'company_tax_no', 'company_reg_no', 'company_email', 'company_phone', 'company_bank', 'invoice_vat_rate', 'invoice_due_days']
-function InvoiceDialog({ store, month, from, to, onClose }) {
+function InvoiceDialog({ store, month, from, to, onClose, history = [], onSaved }) {
   const t = useT()
   const toast = useToast()
   const { data, error } = useData(async () => {
@@ -218,7 +240,22 @@ function InvoiceDialog({ store, month, from, to, onClose }) {
         deliveries: orders.map(o => ({ date: o.delivery_date, no: o.no,
           items: o.order_lines.map(l => `${l.product?.name_hu} ${new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 3 }).format(Number(l.delivered_qty ?? l.qty))} ${l.product?.unit || 'kg'}`).join(', ') })),
       })
-      deliverPdf(await invoicePdfBlob(html), number)
+      const blob = await invoicePdfBlob(html)
+      // keep the file and a record, so the report shows it was made and can open it again
+      const path = `${month}/${number}-${Date.now()}.pdf`
+      const up = await supabase.storage.from(INV_BUCKET).upload(path, blob, { contentType: 'application/pdf', upsert: false })
+      if (up.error) throw up.error
+      const vatAmt = lines.reduce((a, l) => a + l.qty * l.unit_price * vatRate / 100, 0)
+      await q(db.from('invoices').insert({
+        number, customer_id: store.customer_id, location_id: store.location_id || null, month: month + '-01',
+        period_from: from, period_to: to, issue_date: issue, due_date: dueDate, vat_rate: vatRate,
+        net: Math.round(net * 100) / 100, vat: Math.round(vatAmt * 100) / 100, gross: Math.round((net + vatAmt) * 100) / 100,
+        lines: lines.map(l => ({ product: l.product, unit: l.unit, qty: l.qty, unit_price: l.unit_price })), file_path: path,
+      }))
+      toast(t('invSaved'))
+      onSaved?.()
+      deliverPdf(blob, number)
+      onClose()
     } catch (e) { toast(errText(e), 'error') }
     setBusy(false)
   }
@@ -241,6 +278,12 @@ function InvoiceDialog({ store, month, from, to, onClose }) {
           <Field label={t('invDueDays')}><NumInput min={0} max={90} value={dueDays} onChange={v => setDue(v ?? 0)} /></Field>
         </div>
         <p className="muted small">{t('invDeliveries', { n: orders.length })} · {number}</p>
+        {history.length > 0 && <div className="small">
+          <b>{t('invHistory')}</b>
+          <ul className="inv-history">{history.map(x => <li key={x.id}>
+            <button type="button" className="btn-link" onClick={() => openInvoice(x).catch(e => toast(errText(e), 'error'))}>{x.number}</button>
+            {' · '}{fmtDate(x.issue_date, t.lang)} · {fmtFt(Number(x.gross))} · <span className="muted">{new Date(x.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          </li>)}</ul></div>}
         <div className="modal-foot"><span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
           <button type="button" className="btn btn-primary" disabled={busy || !lines.length} onClick={makePdf}>⬇ PDF</button>
