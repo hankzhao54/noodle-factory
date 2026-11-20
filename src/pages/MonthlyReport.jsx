@@ -40,6 +40,12 @@ export default function MonthlyReport() {
     r.sales_by_product.forEach(x => rows.push([x.name, num(x.qty), num(x.internal_qty), num(x.external_qty), num(x.value)]))
     rows.push([], [t('rpSalesByCustomer')], [t('customer'), t('rpOrders'), t('qty'), t('rpNetValue')])
     r.sales_by_customer.forEach(x => rows.push([x.name, x.orders, num(x.qty), num(x.value)]))
+    const m = storeMatrix(r.sales_by_store_product)
+    if (m.stores.length) {
+      rows.push([], [t('rpByStoreProduct') + ' (kg)'], [t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue')])
+      m.stores.forEach(s => rows.push([s.name, ...m.prods.map(p => num(s.q[p.id] || 0)), num(s.total), Math.round(s.value)]))
+      rows.push([t('total'), ...m.prods.map(p => num(m.totals[p.id])), num(m.stores.reduce((a, s) => a + s.total, 0)), Math.round(m.stores.reduce((a, s) => a + s.value, 0))])
+    }
     rows.push([], [t('nav_production')], [t('name'), t('batches'), t('rpActual'), t('rpRecipe'), t('rpLoss')])
     r.production.forEach(x => rows.push([x.name, num(x.batches), num(x.actual), num(x.theoretical), x.loss_pct ?? '']))
     rows.push([], [t('rpMaterials')], [t('name'), t('rpUsed'), t('rpBought'), t('rpAdjusted'), t('rpEndStock'), t('unit'), t('rpEndValue')])
@@ -77,6 +83,15 @@ export default function MonthlyReport() {
           rows={r.sales_by_product.map(x => [x.name, kg(x.internal_qty, t), kg(x.external_qty, t), <b>{kg(x.qty, t)}</b>, fmtFt(num(x.value))])} />
         <Section title={t('rpSalesByCustomer')} head={[t('customer'), t('rpOrders'), t('qty'), t('rpNetValue')]}
           rows={r.sales_by_customer.map(x => [<>{x.name}{x.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>, x.orders, kg(x.qty, t), fmtFt(num(x.value))])} />
+        {(() => {
+          const m = storeMatrix(r.sales_by_store_product)
+          if (!m.stores.length) return null
+          return <Section title={t('rpByStoreProduct')} head={[t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue')]}
+            rows={[...m.stores.map(s => [<>{s.name}{s.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>,
+                ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–']),
+              [<b>{t('total')}</b>, ...m.prods.map(p => <b>{kg(m.totals[p.id], t)}</b>), <b>{kg(m.stores.reduce((a, s) => a + s.total, 0), t)}</b>,
+                <b>{fmtFt(m.stores.reduce((a, s) => a + s.value, 0))}</b>]]} />
+        })()}
         <Section title={t('nav_production')} head={[t('name'), t('batches'), t('rpActual'), t('rpRecipe'), t('rpLoss')]}
           rows={r.production.map(x => [x.name, fmtNum(num(x.batches), t.lang), <b>{kg(x.actual, t)}</b>, kg(x.theoretical, t), x.loss_pct != null ? `${fmtNum(num(x.loss_pct), t.lang)}%` : '–'])} />
         <Section title={t('rpMaterials')} head={[t('name'), t('rpUsed'), t('rpBought'), t('rpAdjusted'), t('rpEndStock'), t('rpEndValue')]}
@@ -88,6 +103,21 @@ export default function MonthlyReport() {
       </>)}
     </div>
   )
+}
+
+// store × product matrix from the flat rows; product columns come from the data (new products appear by themselves)
+function storeMatrix(rows) {
+  const prods = [], seen = {}
+  for (const x of [...(rows || [])].sort((a, b) => num(a.sort) - num(b.sort))) if (!seen[x.product_id]) { seen[x.product_id] = 1; prods.push({ id: x.product_id, name: x.product, unit: x.unit }) }
+  const stores = []
+  const byKey = {}
+  for (const x of rows || []) {
+    const key = x.customer + '|' + (x.store || '')
+    if (!byKey[key]) { byKey[key] = { name: x.store ? `${x.customer} · ${x.store}` : x.customer, type: x.type, q: {}, total: 0, value: 0 }; stores.push(byKey[key]) }
+    const r = byKey[key]; r.q[x.product_id] = (r.q[x.product_id] || 0) + num(x.qty); r.total += num(x.qty); r.value += num(x.value)
+  }
+  const totals = Object.fromEntries(prods.map(p => [p.id, stores.reduce((s, r) => s + (r.q[p.id] || 0), 0)]))
+  return { prods, stores, totals }
 }
 
 const kg = (v, t) => v == null || num(v) === 0 ? '–' : `${fmtNum(Math.round(num(v) * 10) / 10, t.lang)} kg`
