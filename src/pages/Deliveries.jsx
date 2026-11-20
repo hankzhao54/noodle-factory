@@ -95,9 +95,8 @@ export default function Deliveries() {
   const dayShort = Object.keys(dayNeed).filter(pid => (left[pid] ?? 0) < -0.0005)
     .map(pid => ({ p: prod(pid), need: dayNeed[pid], missing: -left[pid] }))
   const ctx = { data, cust, shipTo, prod, reload, setModal, lineShort, printLabels: printShipLabels, print: list => {
-    // own restaurants get no delivery note (they confirm receipt in the app; a label is enough)
-    const notes = list.filter(o => !isInternal(o))
-    if (notes.length) setPrintList(notes); else toast(t('noNoteInternal'))
+    // every order gets a delivery note (own restaurants too, since Nov 2026)
+    if (list.length) setPrintList(list)
   } }
 
   async function assign(order, runId) {
@@ -117,7 +116,7 @@ export default function Deliveries() {
         <p className="day-summary">
           <b>{fmtDate(date, t.lang)}</b>
           <span>{t('deliveredOf', { a: done, b: data.orders.length })}</span>
-          {data.orders.some(o => !isInternal(o)) && <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAllNotes')}</button>}
+          {data.orders.length > 0 && <button className="btn btn-sm" onClick={() => ctx.print(data.orders)}>{t('printAllNotes')}</button>}
           {data.orders.some(isInternal) && <button className="btn btn-sm" onClick={() => printShipLabels(data.orders.filter(isInternal))}>{t('printInternalLabels')}</button>}
         </p>
       )}
@@ -180,7 +179,7 @@ function RunHeader({ run, orders, ctx }) {
       <Status value={run.status} prefix="d" />
       <span className="grow" />
       <button className="btn btn-sm btn-quiet" onClick={() => ctx.setModal({ kind: 'run', run })}>{t('edit')}</button>
-      {orders.some(o => ctx.cust(o.customer_id)?.type !== 'internal') && <button className="btn btn-sm" onClick={() => ctx.print(orders)}>{t('printAllNotes')}</button>}
+      {orders.length > 0 && <button className="btn btn-sm" onClick={() => ctx.print(orders)}>{t('printAllNotes')}</button>}
       {orders.some(o => ctx.cust(o.customer_id)?.type === 'internal') && <button className="btn btn-sm" onClick={() => ctx.printLabels(orders.filter(o => ctx.cust(o.customer_id)?.type === 'internal'))}>{t('printInternalLabels')}</button>}
       {run.status === 'planned' && open > 0 &&
         <button className="btn btn-sm" onClick={() => act(db.from('deliveries').update({ status: 'out' }).eq('id', run.id))}>{t('depart')}</button>}
@@ -260,7 +259,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <span className="grow" />
         {internal && !delivered && <span className="muted small">{t('confirmInApp')}</span>}
         <button className="btn btn-sm" onClick={() => ctx.printLabels([o])}>{t('printShipLabel')}</button>
-        {!internal && <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>}
+        <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>
         {!delivered && <button className="btn btn-sm" onClick={() => ctx.setModal({ kind: 'split', order: o })}>✂️ {t('splitLater')}</button>}
         {!delivered && !o.packed_at && <ReadyButton order={o} ctx={ctx} />}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
