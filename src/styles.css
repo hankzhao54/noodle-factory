@@ -357,7 +357,7 @@ textarea { resize: vertical; }
   .strand-col, .hide-sm { display: none; }
   .stop-grid { grid-template-columns: 1fr; }
   .modal-back { padding: 0; }
-  .modal { border-radius: 0; min-height: 100vh; }
+  .modal { border-radius: 0; min-height: 100vh; min-height: 100dvh; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
@@ -601,3 +601,4 @@ textarea { resize: vertical; }
 .edit-actual:hover span { opacity: 1; }
 .edit-actual-form { display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end; }
 .edit-actual-form input { width: 80px; text-align: right; }
+@media print { .modal-back { display: none !important; } }

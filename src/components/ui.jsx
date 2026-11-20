@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useT, fmtNum, translate } from '../lib/i18n'
 import { logError } from '../lib/errorLog'
 
@@ -44,7 +45,9 @@ export function Modal({ title, onClose, children, wide, footer }) {
     ref.current?.querySelector('input,select,textarea,button')?.focus()
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-  return (
+  // rendered straight into <body>: on iPhone a fixed dialog inside the scrolled page (wide tables,
+  // sticky top bar) could show up blank or off-screen
+  return createPortal(
     <div className="modal-back" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
         <header className="modal-head">
@@ -54,8 +57,7 @@ export function Modal({ title, onClose, children, wide, footer }) {
         <div className="modal-body">{children}</div>
         {footer && <footer className="modal-foot">{footer}</footer>}
       </div>
-    </div>
-  )
+    </div>, document.body)
 }
 
 /* ---------- form bits ---------- */
