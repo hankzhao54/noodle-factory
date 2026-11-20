@@ -602,3 +602,25 @@ textarea { resize: vertical; }
 .edit-actual-form { display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end; }
 .edit-actual-form input { width: 80px; text-align: right; }
 @media print { .modal-back { display: none !important; } }
+
+/* invoice draft rendered off-screen and turned into an A4 PDF */
+.inv-host { position: fixed; left: -10000px; top: 0; z-index: -1; }
+.inv { width: 794px; min-height: 1123px; box-sizing: border-box; padding: 48px 52px; background: #fff; color: #111; font-family: var(--font); font-size: 12px; line-height: 1.45; }
+.inv-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 14px; }
+.inv-title { font-size: 26px; font-weight: 800; letter-spacing: .06em; }
+.inv-sub { color: #666; font-size: 11px; }
+.inv-meta td { padding: 1px 0 1px 14px; } .inv-meta td:first-child { color: #666; padding-left: 0; }
+.inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 18px 0; }
+.inv-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #666; margin-bottom: 4px; }
+.inv-party b { font-size: 14px; }
+.inv-lines, .inv-deliv { width: 100%; border-collapse: collapse; }
+.inv-lines th, .inv-deliv th { text-align: left; font-size: 10px; color: #555; border-bottom: 1px solid #111; padding: 5px 4px; }
+.inv-lines td, .inv-deliv td { border-bottom: 1px solid #ddd; padding: 5px 4px; }
+.inv-lines th:not(:first-child), .inv-lines td:not(:first-child) { text-align: right; }
+.inv-lines tfoot td { font-weight: 700; border-top: 1px solid #111; border-bottom: none; }
+.inv-total { text-align: right; font-size: 16px; margin: 12px 0 18px; }
+.inv-total b { font-size: 20px; }
+.inv-dl { margin-top: 18px; }
+.inv-deliv td { font-size: 11px; }
+.inv-note { color: #333; }
+.inv-foot { margin-top: 28px; color: #666; font-size: 10px; border-top: 1px solid #ddd; padding-top: 8px; }

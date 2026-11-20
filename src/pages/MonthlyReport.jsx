@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtFt } from '../lib/i18n'
-import { Loading, ErrorBox, PageHead } from '../components/ui'
+import { Loading, ErrorBox, PageHead, Modal, Field, NumInput, useToast, errText } from '../components/ui'
+import { invoiceHtml, invoicePdfBlob } from '../lib/invoicePdf'
+import { deliverPdf } from '../lib/labelOutput'
 
 // Month-end report: what went out, what was made, what it cost, what is left. Admins only.
 const lastMonth = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) }
@@ -13,6 +15,7 @@ export default function MonthlyReport() {
   // after the 5th the current month is the useful one; before that, the month that just ended
   const [month, setMonth] = useState(() => new Date().getDate() <= 5 ? lastMonth() : todayISO().slice(0, 7))
   const { data: r, error } = useData(() => q(db.rpc('monthly_report', { p_month: month + '-01' })), [month])
+  const [invFor, setInvFor] = useState(null)
 
   const k = r && (() => {
     const soldQty = r.sales_by_product.reduce((s, x) => s + num(x.qty), 0)
@@ -105,11 +108,12 @@ export default function MonthlyReport() {
         {(() => {
           const m = storeMatrix(r.sales_by_store_product)
           if (!m.stores.length) return null
-          return <Section title={t('rpByStoreProduct')} head={[t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue')]}
+          return <Section title={t('rpByStoreProduct')} head={[t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue'), '']}
             rows={[...m.stores.map(s => [<>{s.name}{s.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>,
-                ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–']),
+                ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–',
+                s.customer_id ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button> : '']),
               [<b>{t('total')}</b>, ...m.prods.map(p => <b>{kg(m.totals[p.id], t)}</b>), <b>{kg(m.stores.reduce((a, s) => a + s.total, 0), t)}</b>,
-                <b>{fmtFt(m.stores.reduce((a, s) => a + s.value, 0))}</b>]]} />
+                <b>{fmtFt(m.stores.reduce((a, s) => a + s.value, 0))}</b>, '']]} />
         })()}
         <Section title={t('nav_production')} head={[t('name'), t('batches'), t('rpActual'), t('rpRecipe'), t('rpLoss')]}
           rows={r.production.map(x => [x.name, fmtNum(num(x.batches), t.lang), <b>{kg(x.actual, t)}</b>, kg(x.theoretical, t), x.loss_pct != null ? `${fmtNum(num(x.loss_pct), t.lang)}%` : '–'])} />
@@ -119,6 +123,7 @@ export default function MonthlyReport() {
         <Section title={t('rpProductsEnd')} head={[t('name'), t('rpEndStock')]}
           rows={r.products.map(x => [x.name, qu(x.end_stock, x.unit, t)])} />
         <p className="muted small">{t('rpNotes')}</p>
+        {invFor && <InvoiceDialog store={invFor} month={r.month} from={r.from} to={r.to} onClose={() => setInvFor(null)} />}
       </>)}
     </div>
   )
@@ -132,7 +137,8 @@ function storeMatrix(rows) {
   const byKey = {}
   for (const x of rows || []) {
     const key = x.customer + '|' + (x.store || '')
-    if (!byKey[key]) { byKey[key] = { name: x.store ? `${x.customer} · ${x.store}` : x.customer, type: x.type, q: {}, total: 0, value: 0 }; stores.push(byKey[key]) }
+    if (!byKey[key]) { byKey[key] = { name: x.store ? `${x.customer} · ${x.store}` : x.customer, type: x.type, customer: x.customer, store: x.store,
+      customer_id: x.customer_id, location_id: x.location_id, q: {}, total: 0, value: 0 }; stores.push(byKey[key]) }
     const r = byKey[key]; r.q[x.product_id] = (r.q[x.product_id] || 0) + num(x.qty); r.total += num(x.qty); r.value += num(x.value)
   }
   const totals = Object.fromEntries(prods.map(p => [p.id, stores.reduce((s, r) => s + (r.q[p.id] || 0), 0)]))
@@ -155,5 +161,91 @@ function Section({ title, head, rows }) {
         <tbody>{rows.map((row, i) => <tr key={i}>{row.map((c, j) => <td key={j} className={j ? 'num' : ''}>{c}</td>)}</tr>)}</tbody>
       </table></div>
     </section>
+  )
+}
+
+/* ---------------- monthly invoice draft (díjbekérő PDF) for one customer / store ---------------- */
+const INV_KEYS = ['company_name', 'company_address', 'company_tax_no', 'company_reg_no', 'company_email', 'company_phone', 'company_bank', 'invoice_vat_rate', 'invoice_due_days']
+function InvoiceDialog({ store, month, from, to, onClose }) {
+  const t = useT()
+  const toast = useToast()
+  const { data, error } = useData(async () => {
+    const [settings, cust, loc, orders] = await Promise.all([
+      q(db.from('settings').select('key,value').in('key', INV_KEYS)),
+      q(db.from('customers').select('id,name,address,vat_no,email,phone').eq('id', store.customer_id).single()),
+      store.location_id ? q(db.from('customer_locations').select('id,name,address').eq('id', store.location_id).single()) : null,
+      (() => {
+        let qq = db.from('orders').select('id,no,delivery_date,order_lines(qty,delivered_qty,unit_price,product:products(name_hu,unit,sort))')
+          .eq('customer_id', store.customer_id).eq('status', 'delivered').gte('delivery_date', from).lte('delivery_date', to).order('delivery_date')
+        qq = store.location_id ? qq.eq('location_id', store.location_id) : qq.is('location_id', null)
+        return q(qq)
+      })(),
+    ])
+    return { s: Object.fromEntries(settings.map(x => [x.key, x.value])), cust, loc, orders }
+  }, [store.customer_id, store.location_id, from, to])
+  const [vat, setVat] = useState(null)
+  const [due, setDue] = useState(null)
+  const [busy, setBusy] = useState(false)
+  if (error) return <Modal title={`🧾 ${store.name}`} onClose={onClose}><ErrorBox error={error} /></Modal>
+  if (!data) return <Modal title={`🧾 ${store.name}`} onClose={onClose}><Loading /></Modal>
+  const { s, cust, loc, orders } = data
+  const vatRate = vat ?? (s.invoice_vat_rate !== undefined && s.invoice_vat_rate !== '' ? Number(s.invoice_vat_rate) : null)
+  const dueDays = due ?? (Number(s.invoice_due_days) || 8)
+
+  // group by product and price (a price change during the month gives two lines)
+  const groups = {}
+  for (const o of orders) for (const l of o.order_lines) {
+    const qty = Number(l.delivered_qty ?? l.qty); const price = Number(l.unit_price || 0)
+    const k = l.product?.name_hu + '|' + price
+    groups[k] = groups[k] || { product: l.product?.name_hu, unit: l.product?.unit, sort: l.product?.sort || 0, unit_price: price, qty: 0 }
+    groups[k].qty += qty
+  }
+  const lines = Object.values(groups).sort((a, b) => a.sort - b.sort || a.unit_price - b.unit_price)
+  const net = lines.reduce((a, l) => a + l.qty * l.unit_price, 0)
+  const noPrice = lines.some(l => !l.unit_price)
+  const issue = todayISO()
+  const dueDate = (() => { const d = new Date(issue + 'T12:00:00'); d.setDate(d.getDate() + dueDays); return d.toISOString().slice(0, 10) })()
+  const number = `D-${month.replace('-', '')}-${String(cust.name).normalize('NFD').replace(/[^A-Za-z0-9]/g, '').slice(0, 10).toUpperCase()}${loc ? '-' + String(loc.name).normalize('NFD').replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase() : ''}`
+
+  async function makePdf() {
+    if (vatRate === null || Number.isNaN(vatRate)) return toast(t('invNeedVat'), 'error')
+    setBusy(true)
+    try {
+      const html = invoiceHtml({
+        seller: { name: s.company_name, address: s.company_address, tax_no: s.company_tax_no, reg_no: s.company_reg_no, bank: s.company_bank, email: s.company_email, phone: s.company_phone },
+        buyer: { name: cust.name, store: loc ? `${loc.name}${loc.address ? ' – ' + loc.address : ''}` : '', address: cust.address, tax_no: cust.vat_no, email: cust.email },
+        number, issueDate: issue, periodFrom: from, periodTo: to, dueDate, vatRate, lines,
+        deliveries: orders.map(o => ({ date: o.delivery_date, no: o.no,
+          items: o.order_lines.map(l => `${l.product?.name_hu} ${new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 3 }).format(Number(l.delivered_qty ?? l.qty))} ${l.product?.unit || 'kg'}`).join(', ') })),
+      })
+      deliverPdf(await invoicePdfBlob(html), number)
+    } catch (e) { toast(errText(e), 'error') }
+    setBusy(false)
+  }
+
+  return (
+    <Modal title={`🧾 ${t('invoiceBtn')} · ${store.name} · ${month}`} onClose={onClose}>
+      <div className="stack">
+        <p className="muted small">{t('invHint')}</p>
+        <table className="table compact">
+          <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('invUnitPrice')}</th><th className="num">{t('rpNetValue')}</th></tr></thead>
+          <tbody>{lines.map((l, i) => <tr key={i}><td>{l.product}</td><td className="num">{fmtNum(Math.round(l.qty * 1000) / 1000, t.lang)} {l.unit}</td>
+            <td className={'num' + (l.unit_price ? '' : ' text-short')}>{fmtFt(l.unit_price)}</td><td className="num">{fmtFt(l.qty * l.unit_price)}</td></tr>)}</tbody>
+          <tfoot><tr><td><b>{t('total')}</b></td><td /><td /><td className="num"><b>{fmtFt(net)}</b></td></tr></tfoot>
+        </table>
+        {noPrice && <p className="note-box short-box">⚠ {t('invNoPrice')}</p>}
+        {!s.company_tax_no && <p className="note-box short-box">⚠ {t('invNoSellerTax')}</p>}
+        {!cust.vat_no && <p className="muted small">{t('invNoBuyerTax')}</p>}
+        <div className="form-grid">
+          <Field label={t('invVat')} hint={vatRate === null ? t('invNeedVat') : t('invVatHint')}><NumInput min={0} max={27} value={vatRate} onChange={v => setVat(v)} /></Field>
+          <Field label={t('invDueDays')}><NumInput min={0} max={90} value={dueDays} onChange={v => setDue(v ?? 0)} /></Field>
+        </div>
+        <p className="muted small">{t('invDeliveries', { n: orders.length })} · {number}</p>
+        <div className="modal-foot"><span className="grow" />
+          <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+          <button type="button" className="btn btn-primary" disabled={busy || !lines.length} onClick={makePdf}>⬇ PDF</button>
+        </div>
+      </div>
+    </Modal>
   )
 }

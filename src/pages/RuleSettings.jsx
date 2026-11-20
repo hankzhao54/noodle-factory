@@ -8,7 +8,7 @@ import { parseDays, parseDates, nextDates, dayName } from '../lib/orderRules'
 import { refreshPublicInfo } from '../lib/publicInfo'
 import { LEGAL } from '../legal/LegalPage'
 
-const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_email', 'company_phone', 'company_authority', 'terms_version']
+const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_bank', 'company_email', 'company_phone', 'company_authority', 'invoice_vat_rate', 'invoice_due_days', 'terms_version']
 const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'urgent_orders', 'idle_logout_minutes', 'production_lookahead_days', 'lot_expiry_warn_days', ...COMPANY]
 
 // Ordering rules (cutoff, lead time, delivery weekdays, closed dates) and the lot expiry warning
