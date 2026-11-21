@@ -93,8 +93,11 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
   const store = stores.find(l => l.id === storeId)
   // the store's delivery weekdays (if set) replace the company's
   const rules = baseRules && store?.weekdays?.length ? { ...baseRules, my_weekdays: store.weekdays } : baseRules
-  const options = nextDates(rules, 6)
-  const [date, setDate] = useState(() => options[0] || todayISO(1))
+  // urgent order: any day from today that is not closed — no delivery-day, cut-off or lead-day limit
+  const [urgent, setUrgent] = useState(false)
+  const urgentRules = rules && { ...rules, earliest: todayISO(), weekdays: '', my_weekdays: [] }
+  const options = nextDates(urgent ? urgentRules : rules, 6)
+  const [date, setDate] = useState(() => nextDates(rules, 1)[0] || todayISO(1))
   function pickStore(id) {
     setStoreId(id); try { localStorage.setItem(STORE_KEY, id) } catch { /* ignore */ }
     const l = stores.find(x => x.id === id)
@@ -102,14 +105,13 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
     if (dateProblem(r, date)) setDate(nextDates(r, 1)[0] || date)
   }
   const needStore = stores.length > 0 && !store
-  // urgent order: any day that is not closed and not too early, also outside the delivery days
-  const [urgent, setUrgent] = useState(false)
   const rawProblem = dateProblem(rules, date)
-  const problem = urgent && ['no_delivery_day', 'not_your_day'].includes(rawProblem) ? '' : rawProblem
+  const problem = urgent ? (date < todayISO() ? 'too_late' : dateProblem(urgentRules, date)) : rawProblem
   function toggleUrgent() {
     const on = !urgent
     setUrgent(on)
-    if (!on && dateProblem(rules, date)) setDate(options[0] || date)
+    if (on) setDate(nextDates(urgentRules, 1)[0] || todayISO())
+    else if (dateProblem(rules, date)) setDate(nextDates(rules, 1)[0] || date)
   }
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
@@ -154,7 +156,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
           </div>
         )}
         <label className="field date-other"><span className="muted small">{t('otherDate')}</span>
-          <input type="date" min={rules?.earliest || todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
+          <input type="date" min={urgent ? todayISO() : rules?.earliest || todayISO()} value={date} onChange={e => setDate(e.target.value)} /></label>
         {rules?.urgent && (
           <button type="button" className={urgent ? 'chip chip-urgent on' : 'chip chip-urgent'} aria-pressed={urgent} onClick={toggleUrgent}>
             🚨 {t('urgentOrder')}
