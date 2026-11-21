@@ -111,7 +111,7 @@ const D = {
   addToPO: ['加入进货单', 'Add to a purchase order', 'Beszerzéshez ad'],
   // inventory
   onHand: ['现有', 'On hand', 'Készleten'],
-  reserved: ['已被订', 'Ordered', 'Lefoglalva'],
+  reserved: ['订单未送', 'On open orders', 'Nyitott rendelésekben'],
   available: ['可用', 'Available', 'Szabad'],
   materialsTab: ['原料库存', 'Raw materials', 'Alapanyagok'],
   productsTab: ['成品库存', 'Finished goods', 'Késztermékek'],
@@ -809,6 +809,7 @@ const D = {
   trendPerDay: ['每天 kg', 'kg per day', 'kg naponta'],
   allProducts: ['全部产品', 'All products', 'Minden termék'],
   trendTable: ['明细（kg）', 'Details (kg)', 'Részletek (kg)'],
+  toMake: ['还要做', 'Still to make', 'Még gyártani'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],

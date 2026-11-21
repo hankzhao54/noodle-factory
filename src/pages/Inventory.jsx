@@ -82,15 +82,16 @@ export default function Inventory() {
       ) : (
         data.products.length === 0 ? <Empty /> : (
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>{t('name')}</th><th className="num">{t('onHand')}</th><th className="num">{t('reserved')}</th><th className="num">{t('available')}</th><th /></tr></thead>
+            <thead><tr><th>{t('name')}</th><th className="num">{t('onHand')}</th><th className="num">{t('reserved')}</th><th className="num">{t('toMake')}</th><th /></tr></thead>
             <tbody>{data.products.filter(match).map(p => {
-              const avail = p.on_hand - p.reserved
+              // what is in the fridge now is the stock; open orders only tell how much more has to be made
+              const short = Math.max(0, Number(p.reserved) - Number(p.on_hand))
               return (
-                <tr key={p.id} className={avail < 0 ? 'row-low' : ''}>
+                <tr key={p.id}>
                   <td><b>{t.pick(p)}</b></td>
-                  <td className="num">{fmtNum(p.on_hand, t.lang)} <span className="unit">{p.unit}</span></td>
+                  <td className="num"><b>{fmtNum(p.on_hand, t.lang)}</b> <span className="unit">{p.unit}</span></td>
                   <td className="num muted">{fmtNum(p.reserved, t.lang)}</td>
-                  <td className={`num ${avail < 0 ? 'neg' : ''}`}><b>{fmtNum(avail, t.lang)}</b></td>
+                  <td className="num">{short > 0 ? <span className="tag tag-low">{fmtNum(Math.round(short * 100) / 100, t.lang)} {p.unit}</span> : <span className="muted">–</span>}</td>
                   <td className="act"><button className="btn btn-quiet" onClick={() => setAdjusting({ kind: 'product', row: p })}>{t('adjust')}</button></td>
                 </tr>
               )
