@@ -18,14 +18,14 @@ export default function Reports() {
   const [to, setTo] = useState(todayISO())
   const { data, loading, error } = useData(async () => {
     const [products, pcost, materials, customers, suppliers, batches, orders, moves, pos] = await Promise.all([
-      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct')),
+      q(db.from('products').select('id,name_zh,name_en,name_hu,unit,batch_yield,loss_pct,sort')),
       q(db.from('product_cost').select('product_id,unit_cost')),
       q(db.from('materials').select('id,name_zh,name_en,name_hu,unit,cost_per_unit')),
       q(db.from('customers').select('id,name,type')),
       q(db.from('suppliers').select('id,name')),
       q(db.from('production_batches').select('product_id,batches,actual_qty,done_at').eq('status', 'done')
         .gte('done_at', from).lte('done_at', endOfDay(to))),
-      q(db.from('orders').select('customer_id, delivery_date, order_lines(product_id, qty, delivered_qty, unit_price)')
+      q(db.from('orders').select('customer_id, location_id, store:customer_locations(name), delivery_date, order_lines(product_id, qty, delivered_qty, unit_price, vacuum_fee, portion_fee)')
         .eq('status', 'delivered').gte('delivery_date', from).lte('delivery_date', to)),
       q(db.from('stock_movements').select('material_id,product_id,qty,reason,created_at')
         .in('reason', ['production_use', 'waste']).gte('created_at', from).lte('created_at', endOfDay(to)).limit(10000)),
@@ -86,12 +86,22 @@ function ReportBody({ data, range }) {
   // sales
   const byCust = new Map(), byProd = new Map()
   let revenue = 0, salesQty = 0
+  // every restaurant / store × product (product columns come from the data, so new products appear by themselves)
+  const byStore = new Map(), storeProds = new Set()
   data.orders.forEach(o => o.order_lines.forEach(l => {
     const qty = Number(l.delivered_qty ?? l.qty), val = qty * Number(l.unit_price || 0)
+    const fee = qty * (Number(l.vacuum_fee || 0) + Number(l.portion_fee || 0))
     revenue += val; salesQty += qty
     add(byCust, o.customer_id, { qty, val })
     add(byProd, l.product_id, { qty, val })
+    const k = o.customer_id + '|' + (o.location_id || '')
+    const cur = byStore.get(k) || { customer_id: o.customer_id, store: o.store?.name, q: {}, qty: 0, val: 0, fee: 0 }
+    cur.q[l.product_id] = (cur.q[l.product_id] || 0) + qty; cur.qty += qty; cur.val += val; cur.fee += fee
+    byStore.set(k, cur); storeProds.add(l.product_id)
   }))
+  const spCols = [...storeProds].map(id => byId(data.products, id)).sort((a, b) => (a.sort || 0) - (b.sort || 0))
+  const storeRows = [...byStore.values()].map(r => ({ ...r, c: byId(data.customers, r.customer_id) }))
+    .sort((a, b) => (a.c.name || '').localeCompare(b.c.name || '') || (a.store || '').localeCompare(b.store || ''))
   // raw materials used / waste
   const used = new Map(), waste = new Map()
   let usedCost = 0, wasteCost = 0
@@ -149,6 +159,14 @@ function ReportBody({ data, range }) {
           return [c.name + (c.type === 'internal' ? ` (${t('internal')})` : ''), fmtNum(x.qty, t.lang), fmtFt(x.val, t.lang), revenue ? Math.round(x.val / revenue * 100) + '%' : '–']
         })}
         bars={sorted(byCust, 'val').map(([, x]) => x.val)} barCol={2} />
+
+      <Section title={t('rpByStoreProduct')} file={`sales_by_store_product_${range}`}
+        head={[t('customer'), ...spCols.map(p => `${t.pick(p)} (${p.unit || 'kg'})`), t('total'), t('revenueNet'), t('packFeeCol'), t('totalNet')]}
+        rows={[...storeRows.map(r => [r.c.name + (r.store ? ` · ${r.store}` : '') + (r.c.type === 'internal' ? ` (${t('internal')})` : ''),
+            ...spCols.map(p => r.q[p.id] ? fmtNum(r.q[p.id], t.lang) : '–'), fmtNum(r.qty, t.lang), fmtFt(r.val, t.lang), r.fee ? fmtFt(r.fee, t.lang) : '–', fmtFt(r.val + r.fee, t.lang)]),
+          ...(storeRows.length ? [[t('total'), ...spCols.map(p => fmtNum(storeRows.reduce((a, r) => a + (r.q[p.id] || 0), 0), t.lang)),
+            fmtNum(storeRows.reduce((a, r) => a + r.qty, 0), t.lang), fmtFt(storeRows.reduce((a, r) => a + r.val, 0), t.lang),
+            fmtFt(storeRows.reduce((a, r) => a + r.fee, 0), t.lang), fmtFt(storeRows.reduce((a, r) => a + r.val + r.fee, 0), t.lang)]] : [])]} />
 
       <Section title={t('repSalesProduct')} file={`sales_by_product_${range}`}
         head={[t('name'), t('qty'), t('revenueNet'), t('avgPrice')]}

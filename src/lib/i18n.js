@@ -801,6 +801,8 @@ const D = {
   contactPerson: ['联系人', 'Contact person', 'Kapcsolattartó'],
   billingEmail: ['开票邮箱', 'Billing e-mail', 'Számlázási e-mail'],
   deliveryAddress: ['送货地址', 'Delivery address', 'Szállítási cím'],
+  packFeeCol: ['包装费', 'Packing fees', 'Csomagolási díj'],
+  totalNet: ['合计（不含税）', 'Total (net)', 'Összesen (nettó)'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
