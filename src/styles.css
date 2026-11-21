@@ -627,3 +627,9 @@ textarea { resize: vertical; }
 .inv-done { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
 .inv-done .btn-link:first-child { color: var(--ok); font-weight: 600; }
 .inv-history { margin: 4px 0 0; padding-left: 18px; }
+
+/* szamlazz.hu official invoice box (month-end report → invoice dialog) */
+.sz-box { border: 1px solid var(--line, #e3e6e8); border-radius: var(--r-sm); padding: 12px; display: grid; gap: 8px; }
+.sz-box p { margin: 0; }
+.sz-preview { display: grid; gap: 4px; }
+.sz-xml { max-height: 220px; overflow: auto; font-size: 11px; background: #f6f7f8; padding: 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; }

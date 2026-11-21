@@ -19,11 +19,15 @@ export default function MonthlyReport() {
   // Excel, printing and invoices only once the month is over (from its last day): before that the numbers still change
   const closed = !!r && todayISO() >= r.to
   // invoices already generated for this month (latest per customer / store)
-  const inv = useData(() => q(db.from('invoices').select('id,number,customer_id,location_id,issue_date,gross,file_path,created_at')
+  const inv = useData(() => q(db.from('invoices').select('id,number,kind,customer_id,location_id,issue_date,gross,file_path,cancelled_at,created_at')
     .eq('month', month + '-01').order('created_at', { ascending: false })), [month])
   const invKey = (c, l) => c + '|' + (l || '')
-  const latestInv = {}, invCount = {}
-  for (const x of inv.data || []) { const k = invKey(x.customer_id, x.location_id); latestInv[k] = latestInv[k] || x; invCount[k] = (invCount[k] || 0) + 1 }
+  const latestInv = {}, invCount = {}, official = {}
+  for (const x of inv.data || []) {
+    const k = invKey(x.customer_id, x.location_id)
+    if (x.kind === 'invoice') { if (!x.cancelled_at) official[k] = official[k] || x; continue }
+    latestInv[k] = latestInv[k] || x; invCount[k] = (invCount[k] || 0) + 1
+  }
 
   const k = r && (() => {
     const soldQty = r.sales_by_product.reduce((s, x) => s + num(x.qty), 0)
@@ -122,6 +126,11 @@ export default function MonthlyReport() {
                 ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–',
                 s.customer_id ? (() => {
                   const x = latestInv[invKey(s.customer_id, s.location_id)]
+                  const o = official[invKey(s.customer_id, s.location_id)]
+                  if (o) return <span className="inv-done no-print">
+                    <button className="btn-link" title={t('szTitle')} onClick={() => o.file_path ? openInvoice(o).catch(e => alert(e.message)) : setInvFor(s)}>🧾 {o.number}</button>
+                    <span className="muted small"> · {fmtDate(o.issue_date, t.lang)}</span>
+                  </span>
                   if (!x) return closed ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
                     : <span className="muted small no-print">🔒 {t('invAfterMonth')}</span>
                   return <span className="inv-done no-print">
@@ -142,7 +151,8 @@ export default function MonthlyReport() {
           rows={r.products.map(x => [x.name, qu(x.end_stock, x.unit, t)])} />
         <p className="muted small">{t('rpNotes')}</p>
         {invFor && <InvoiceDialog store={invFor} month={r.month} from={r.from} to={r.to} onClose={() => setInvFor(null)}
-          history={(inv.data || []).filter(x => invKey(x.customer_id, x.location_id) === invKey(invFor.customer_id, invFor.location_id))}
+          history={(inv.data || []).filter(x => x.kind !== 'invoice' && invKey(x.customer_id, x.location_id) === invKey(invFor.customer_id, invFor.location_id))}
+          official={official[invKey(invFor.customer_id, invFor.location_id)]}
           onSaved={() => inv.reload()} />}
       </>)}
     </div>
@@ -192,7 +202,7 @@ async function openInvoice(x) {
   deliverPdf(data, x.number)
 }
 const INV_KEYS = ['company_name', 'company_address', 'company_tax_no', 'company_reg_no', 'company_email', 'company_phone', 'company_bank', 'invoice_vat_rate', 'invoice_due_days']
-function InvoiceDialog({ store, month, from, to, onClose, history = [], onSaved }) {
+function InvoiceDialog({ store, month, from, to, onClose, history = [], official, onSaved }) {
   const t = useT()
   const toast = useToast()
   const { data, error } = useData(async () => {
@@ -288,11 +298,89 @@ function InvoiceDialog({ store, month, from, to, onClose, history = [], onSaved 
             <button type="button" className="btn-link" onClick={() => openInvoice(x).catch(e => toast(errText(e), 'error'))}>{x.number}</button>
             {' · '}{fmtDate(x.issue_date, t.lang)} · {fmtFt(Number(x.gross))} · <span className="muted">{new Date(x.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
           </li>)}</ul></div>}
+        <SzamlazzBox store={store} month={month} vatRate={vatRate} dueDays={dueDays} dueDate={dueDate} official={official}
+          onIssued={() => { onSaved?.(); onClose() }} />
         <div className="modal-foot"><span className="grow" />
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
-          <button type="button" className="btn btn-primary" disabled={busy || !lines.length} onClick={makePdf}>⬇ PDF</button>
+          <button type="button" className="btn btn-primary" disabled={busy || !lines.length} onClick={makePdf}>⬇ {t('szProformaPdf')}</button>
         </div>
       </div>
     </Modal>
+  )
+}
+
+/* ---------------- official invoice via szamlazz.hu (edge function noodle-szamlazz) ---------------- */
+async function szamlazz(body) {
+  const { data, error } = await supabase.functions.invoke('noodle-szamlazz', { body })
+  if (error) {
+    let e = { error: error.message }
+    try { e = await error.context.json() } catch { /* not JSON */ }
+    const err = new Error(e.error || error.message); err.info = e; throw err
+  }
+  return data
+}
+
+function SzamlazzBox({ store, month, vatRate, dueDays, dueDate, official, onIssued }) {
+  const t = useT()
+  const toast = useToast()
+  const status = useData(() => szamlazz({ action: 'status' }), [])
+  const [fulfil, setFulfil] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const st = status.data
+  const fulfilDate = fulfil ?? dueDate
+  const args = { action: 'issue', customer_id: store.customer_id, location_id: store.location_id || null, month,
+                 vat_rate: vatRate, due_days: dueDays, fulfillment_date: fulfilDate }
+  const errMsg = e => {
+    const i = e.info || {}
+    if (i.error === 'already_issued') return t('szAlready', { n: i.number })
+    if (i.error === 'szamlazz') return `szamlazz.hu ${i.code}: ${i.message}`
+    if (i.problems) return i.problems.map(p => t('sz_' + p)).join(' · ')
+    return i.error && t('sz_' + i.error) !== 'sz_' + i.error ? t('sz_' + i.error) : errText(e)
+  }
+
+  async function run(dry) {
+    if (vatRate === null || Number.isNaN(vatRate)) return toast(t('invNeedVat'), 'error')
+    setBusy(true)
+    try {
+      const r = await szamlazz({ ...args, dry_run: dry })
+      if (r.demo || r.dry_run) { setPreview(r); setConfirm(false) }
+      else { toast(t('szIssued', { n: r.number })); onIssued?.() }
+    } catch (e) { toast(errMsg(e), 'error') }
+    setBusy(false)
+  }
+
+  if (official) return (
+    <div className="sz-box"><b>{t('szTitle')}</b>
+      <p>✓ {t('szIssued', { n: official.number })} · {fmtDate(official.issue_date, t.lang)} · {fmtFt(Number(official.gross))}</p>
+      {official.file_path && <button type="button" className="btn btn-sm" onClick={() => openInvoice(official).catch(e => toast(errText(e), 'error'))}>⬇ PDF</button>}
+    </div>)
+
+  return (
+    <div className="sz-box">
+      <b>{t('szTitle')}</b>
+      {status.error ? <ErrorBox error={status.error} /> : !st ? <Loading /> : <>
+        <p className={st.configured ? 'note-box short-box' : 'muted small'}>{st.configured ? '⚠ ' + t('szLive') : 'ℹ ' + t('szDemo')}</p>
+        <div className="form-grid">
+          <Field label={t('szFulfil')} hint={t('szFulfilHint')}>
+            <input type="date" value={fulfilDate} onChange={e => { setFulfil(e.target.value || null); setPreview(null) }} /></Field>
+        </div>
+        {preview && <div className="sz-preview small">
+          {preview.demo && <p><b>{t('szDemoResult')}</b></p>}
+          {preview.problems?.length > 0 && <p className="note-box short-box">⚠ {preview.problems.map(p => t('sz_' + p)).join(' · ')}</p>}
+          <p>{preview.einvoice ? t('szKind') : t('szPaper')} · {t('rpNet')} {fmtFt(preview.totals.net)} · ÁFA {fmtFt(preview.totals.vat)} · <b>{fmtFt(preview.totals.gross)}</b></p>
+          <p className="muted">{fmtDate(preview.issue_date, t.lang)} · {t('szFulfil')}: {fmtDate(preview.fulfillment_date, t.lang)} · {t('invDueDays')}: {fmtDate(preview.due_date, t.lang)} · {preview.order_ref}</p>
+          <p className="muted">{preview.send_email ? t('szEmailTo', { e: preview.xml.match(/<email>([^<]*)<\/email>/)?.[1] || '' }) : t('szNoEmail')}</p>
+          <details><summary>{t('szShowXml')}</summary><pre className="sz-xml">{preview.xml.replace(/></g, '>\n<')}</pre></details>
+        </div>}
+        <div className="row-gap">
+          <button type="button" className="btn" disabled={busy} onClick={() => run(true)}>{t('szPreview')}</button>
+          {st.configured && (!confirm
+            ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setConfirm(true)}>🧾 {t('szIssue')}</button>
+            : <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(false)}>{t('szConfirm', { g: preview ? fmtFt(preview.totals.gross) : '' })}</button>)}
+        </div>
+      </>}
+    </div>
   )
 }
