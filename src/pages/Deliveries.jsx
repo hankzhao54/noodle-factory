@@ -99,9 +99,23 @@ export default function Deliveries() {
   }
   const dayShort = Object.keys(dayNeed).filter(pid => (left[pid] ?? 0) < -0.0005)
     .map(pid => ({ p: prod(pid), need: dayNeed[pid], missing: -left[pid] }))
-  const ctx = { data, cust, shipTo, prod, reload, setModal, lineShort, printLabels: printShipLabels, print: list => {
-    // every order gets a delivery note (own restaurants too, since Nov 2026)
-    if (list.length) setPrintList(list)
+  // orders of the same customer / store on the same day share one delivery note
+  const noteKey = o => `${o.customer_id}|${o.location_id || ''}|${o.delivery_date}`
+  const sameStop = o => data.orders.filter(x => x.status !== 'cancelled' && noteKey(x) === noteKey(o))
+  function mergeForNotes(list) {
+    const groups = new Map()
+    for (const o of list) { const k = noteKey(o); groups.set(k, [...(groups.get(k) || []), o]) }
+    return [...groups.values()].map(g => g.length === 1 ? g[0] : {
+      ...g[0], id: g.map(o => o.id).join('+'), _nos: g.map(o => o.no),
+      order_lines: g.flatMap(o => o.order_lines.map(l => ({ ...l, _no: o.no }))),
+      notes: [...new Set(g.map(o => o.notes).filter(Boolean))].join(' · ') || null,
+      received_by: g.map(o => o.received_by).find(Boolean) || null,
+      status: g.every(o => o.status === 'delivered') ? 'delivered' : g[0].status,
+    })
+  }
+  const ctx = { data, cust, shipTo, prod, reload, setModal, lineShort, sameStop, printLabels: printShipLabels, print: list => {
+    // every order gets a delivery note (own restaurants too, since Nov 2026); same customer + store + day → one note
+    if (list.length) setPrintList(mergeForNotes(list))
   } }
 
   async function assign(order, runId) {
@@ -268,7 +282,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <span className="grow" />
         {internal && !delivered && <span className="muted small">{t('confirmInApp')}</span>}
         <button className="btn btn-sm" onClick={() => ctx.printLabels([o])}>{t('printShipLabel')}</button>
-        <button className="btn btn-sm" onClick={() => ctx.print([o])}>{t('printNote')}</button>
+        <button className="btn btn-sm" onClick={() => ctx.print(ctx.sameStop(o))}>{t('printNote')}{ctx.sameStop(o).length > 1 ? ` (${ctx.sameStop(o).map(x => '#' + x.no).join(' + ')})` : ''}</button>
         {!delivered && <button className="btn btn-sm" onClick={() => ctx.setModal({ kind: 'split', order: o })}>✂️ {t('splitLater')}</button>}
         {!delivered && !o.packed_at && <ReadyButton order={o} ctx={ctx} />}
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
@@ -794,7 +808,7 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
         </div>
         <div className="dnote-title">
           <h1>{t('deliveryNote')}</h1>
-          <p className="dnote-no">#{o.no}</p>
+          <p className="dnote-no">{o._nos ? o._nos.map(n => '#' + n).join(' + ') : `#${o.no}`}</p>
           <p>{huDate(o.delivery_date)}</p>
           {run && <p className="dnote-run">D{run.no}{run.driver ? ` · ${run.driver}` : ''}{run.vehicle ? ` · ${run.vehicle}` : ''}</p>}
         </div>
@@ -815,7 +829,8 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
             <tr key={l.id}>
               <td className="dnote-i">{i + 1}</td>
               <td><span className="dnote-prod">{t.pick(p)}</span>{p.code && <span className="dnote-code"> {p.code}</span>}
-                {hasPacking(l) && <span className="dnote-pack"> · {packTextHu(l, info?.packing_bag_text)}</span>}{ingrLine(pinfo?.[l.product_id])}</td>
+                {hasPacking(l) && <span className="dnote-pack"> · {packTextHu(l, info?.packing_bag_text)}</span>}
+                {l._no && <span className="dnote-code"> · #{l._no}</span>}{ingrLine(pinfo?.[l.product_id])}</td>
               <td className="dnote-qty"><b>{fmtNum(qtyOf(l), t.lang)}</b> <span>{p.unit}</span></td>
             </tr>
           )
