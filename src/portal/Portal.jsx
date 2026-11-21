@@ -42,10 +42,13 @@ export default function Portal() {
       <InstallHint />
       {needTerms && <TermsBanner first={!profile.terms_version} onDone={reloadProfile} />}
       {isRestaurant && data?.orders && <ToReceive orders={data.orders} catalog={data.catalog} reload={reload} />}
-      <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')]]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['order', t('portalOrder')], ['history', t('portalHistory')],
+        ...(profile?.role === 'customer' && data?.me ? [['company', t('portalCompany')]] : [])]} />
       <ErrorBox error={error} />
       {!data ? <Loading /> : !profile?.customer_id || !data.me ? (
         <p className="note-box">{t('noCustomerLink')}</p>
+      ) : tab === 'company' ? (
+        <CompanyDetails me={data.me} storeOnly={!!data.rules?.my_location} reload={reload} />
       ) : tab === 'order' ? (
         <OrderSheet blocked={needTerms} info={info} pinfo={data.pinfo} internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
           onPlaced={() => { setQty({}); reload(); setTab('history') }} />
@@ -59,6 +62,73 @@ export default function Portal() {
       )}
       <LegalLinks className="portal-legal" />
     </div>
+  )
+}
+
+/* ---------------- external customers keep their own company (billing) and store details ---------------- */
+function CompanyDetails({ me, storeOnly, reload }) {
+  const t = useT()
+  const toast = useToast()
+  const stores = useData(() => q(db.from('customer_locations').select('id,name,address,contact_person,phone,notes,active').eq('active', true).order('sort')), [])
+  const [f, setF] = useState(() => ({ name: me.name || '', address: me.address || '', vat_no: me.vat_no || '', contact: me.contact_person || '',
+    phone: me.phone || '', email: me.email || '', notes: me.delivery_notes || '' }))
+  const [busy, setBusy] = useState(false)
+  const set = k => e => setF(x => ({ ...x, [k]: e.target.value }))
+  async function save(e) {
+    e.preventDefault(); setBusy(true)
+    try {
+      await q(db.rpc('update_my_company', { p_name: f.name, p_address: f.address, p_vat_no: f.vat_no, p_contact: f.contact,
+        p_phone: f.phone, p_email: f.email, p_notes: f.notes }))
+      toast(t('saved')); reload()
+    } catch (err) { toast(errText(err), 'error') }
+    setBusy(false)
+  }
+  return (
+    <div className="stack">
+      {storeOnly ? <p className="muted small">{t('companyStoreOnly')}</p> : (
+        <form className="panel stack" onSubmit={save}>
+          <h3>{t('companyDetails')}</h3>
+          <p className="muted small">{t('companyHint')}</p>
+          <Field label={t('companyName')}><input required value={f.name} onChange={set('name')} /></Field>
+          <Field label={t('billingAddress')}><textarea rows={2} value={f.address} onChange={set('address')} /></Field>
+          <Field label={t('vatNo')} hint={t('vatNoHint')}><input value={f.vat_no} onChange={set('vat_no')} placeholder="12345678-2-42" /></Field>
+          <div className="form-grid">
+            <Field label={t('contactPerson')}><input value={f.contact} onChange={set('contact')} /></Field>
+            <Field label={t('phone')}><input type="tel" value={f.phone} onChange={set('phone')} /></Field>
+          </div>
+          <Field label={t('billingEmail')}><input type="email" value={f.email} onChange={set('email')} /></Field>
+          <Field label={t('deliveryNotes')}><textarea rows={2} value={f.notes} onChange={set('notes')} /></Field>
+          <div className="modal-foot"><span className="grow" /><button className="btn btn-primary" disabled={busy}>{t('save')}</button></div>
+        </form>
+      )}
+      {(stores.data || []).map(st => <StoreDetails key={st.id} store={st} onSaved={() => { stores.reload(); reload() }} />)}
+    </div>
+  )
+}
+
+function StoreDetails({ store, onSaved }) {
+  const t = useT()
+  const toast = useToast()
+  const [f, setF] = useState({ address: store.address || '', contact: store.contact_person || '', phone: store.phone || '', notes: store.notes || '' })
+  const [busy, setBusy] = useState(false)
+  const set = k => e => setF(x => ({ ...x, [k]: e.target.value }))
+  async function save(e) {
+    e.preventDefault(); setBusy(true)
+    try { await q(db.rpc('update_my_store', { p_store: store.id, p_address: f.address, p_contact: f.contact, p_phone: f.phone, p_notes: f.notes })); toast(t('saved')); onSaved() }
+    catch (err) { toast(errText(err), 'error') }
+    setBusy(false)
+  }
+  return (
+    <form className="panel stack" onSubmit={save}>
+      <h3>🏪 {store.name}</h3>
+      <Field label={t('deliveryAddress')}><textarea rows={2} value={f.address} onChange={set('address')} /></Field>
+      <div className="form-grid">
+        <Field label={t('contactPerson')}><input value={f.contact} onChange={set('contact')} /></Field>
+        <Field label={t('phone')}><input type="tel" value={f.phone} onChange={set('phone')} /></Field>
+      </div>
+      <Field label={t('deliveryNotes')}><textarea rows={2} value={f.notes} onChange={set('notes')} /></Field>
+      <div className="modal-foot"><span className="grow" /><button className="btn btn-primary" disabled={busy}>{t('save')}</button></div>
+    </form>
   )
 }
 
