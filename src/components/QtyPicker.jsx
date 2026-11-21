@@ -5,7 +5,8 @@ import { allergenName } from './LabelPrint'
 
 // product rows with − / + steppers. items: [{id, name_*, unit, price, min_order_qty, pack_size_g}]
 // info: product_info() map (portal) → each row gets a "Product information" section
-export default function QtyPicker({ items, qty, setQty, info, producer }) {
+// pack / setPack / packInfo (optional): per product packing choice, shown once a quantity is entered
+export default function QtyPicker({ items, qty, setQty, info, producer, pack, setPack, packInfo }) {
   // only show the photo column when at least one product has a photo
   const withPhotos = items.some(p => p.image_path)
   const t = useT()
@@ -38,6 +39,8 @@ export default function QtyPicker({ items, qty, setQty, info, producer }) {
               <button type="button" aria-label="+" onClick={() => set(p.id, Math.max(v + step, min))}>+</button>
               <span className="unit">{p.unit}</span>
             </div>
+            {v > 0 && setPack && <PackPicker value={pack?.[p.id] || packInfo?.def || {}} fees={packInfo?.fees} internal={packInfo?.internal}
+              defaultG={p.pack_size_g} onChange={x => setPack(s => ({ ...s, [p.id]: x }))} />}
             {info?.[p.id] && <ProductInfo pi={info[p.id]} producer={producer} />}
           </li>
         )
@@ -46,8 +49,39 @@ export default function QtyPicker({ items, qty, setQty, info, producer }) {
   )
 }
 
-export const cartTotal = (items, qty) =>
-  items.reduce((s, p) => s + (qty[p.id] || 0) * Number(p.price || 0), 0)
+export const cartTotal = (items, qty, pack, def, fees) =>
+  items.reduce((s, p) => {
+    const k = pack?.[p.id] || def || {}
+    const fee = fees ? (k.vacuum ? fees.vacuum : 0) + (k.portion_g ? fees.portion : 0) : 0
+    return s + (qty[p.id] || 0) * (Number(p.price || 0) + fee)
+  }, 0)
+
+// packing choice for one line: none / vacuum bags / portions of N g / portions + vacuum
+export function PackPicker({ value, onChange, fees, internal, defaultG, compact }) {
+  const t = useT()
+  const mode = value.portion_g != null ? (value.vacuum ? 'both' : 'portion') : value.vacuum ? 'vacuum' : 'none'
+  const fee = n => internal || !fees ? '' : ` (+${fmtFt(n, t.lang)}/kg)`
+  const setMode = m => onChange({
+    vacuum: m === 'vacuum' || m === 'both',
+    portion_g: m === 'portion' || m === 'both' ? (value.portion_g ?? (defaultG || 0)) : null,
+  })
+  return (
+    <div className={'pack-pick' + (compact ? ' compact' : '')}>
+      <span className="pack-ico" aria-hidden>📦</span>
+      <select aria-label={t('packing')} value={mode} onChange={e => setMode(e.target.value)}>
+        <option value="none">{t('packNone')}</option>
+        <option value="vacuum">{t('packVacuum', { bag: fees?.bag || '2–3 kg' })}{fee(fees?.vacuum)}</option>
+        <option value="portion">{t('packPortion')}{fee(fees?.portion)}</option>
+        <option value="both">{t('packPortionVacuum')}{fee((fees?.vacuum || 0) + (fees?.portion || 0))}</option>
+      </select>
+      {(mode === 'portion' || mode === 'both') && <label className="pack-g">
+        <NumInput className="input-sm" min={10} max={10000} value={value.portion_g || null} placeholder="120"
+          aria-label={t('portionSize')} onChange={n => onChange({ ...value, portion_g: n ? Math.round(n) : 0 })} /> g / {t('portionUnit')}</label>}
+      {(mode === 'portion' || mode === 'both') && !(value.portion_g >= 10) && <span className="text-short small">{t('portionNeeded')}</span>}
+    </div>
+  )
+}
+export const packOk = k => !k || k.portion_g == null || k.portion_g >= 10
 
 function ProductInfo({ pi, producer }) {
   const t = useT()

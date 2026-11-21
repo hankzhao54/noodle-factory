@@ -5,6 +5,7 @@ import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate, fmtFt, translate, pickName } from '../lib/i18n'
 import { compressImage } from '../lib/image'
 import { usePublicInfo } from '../lib/publicInfo'
+import { packFees, packText, packTextHu, lineFee, hasPacking } from '../lib/packing'
 import { allergenName, drawSimpleLabel, labelFontsReady, readPaper, LABEL_SIZES } from '../components/LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 import { Modal, Field, Loading, ErrorBox, PageHead, Status, NumInput, useToast, errText } from '../components/ui'
@@ -201,7 +202,8 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
   const c = ctx.shipTo(o)
   const delivered = o.status === 'delivered'
   const internal = c.type === 'internal'
-  const total = o.order_lines.reduce((s, l) => s + Number(delivered ? l.delivered_qty ?? l.qty : l.qty) * Number(l.unit_price || 0), 0)
+  const total = o.order_lines.reduce((s, l) => s + Number(delivered ? l.delivered_qty ?? l.qty : l.qty) * (Number(l.unit_price || 0) + lineFee(l)), 0)
+  const bag = packFees(usePublicInfo()).bag
 
   return (
     <article className={`stop-card ${delivered ? 'is-done' : ''}`}>
@@ -233,7 +235,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
           const sh = !delivered && ctx.lineShort[l.id]
           return (
             <tr key={l.id}>
-              <td>{t.pick(p)}</td>
+              <td>{t.pick(p)}{hasPacking(l) && <div className="pack-tag">📦 {packText(t, l, bag)}</div>}</td>
               <td className="num">
                 {delivered && l.delivered_qty != null && Number(l.delivered_qty) !== Number(l.qty)
                   ? <><s className="muted">{fmtNum(l.qty, t.lang)}</s> <b>{fmtNum(l.delivered_qty, t.lang)}</b></>
@@ -712,6 +714,7 @@ function shipLabelLines(o, c, prod, run) {
   o.order_lines.forEach(l => {
     const p = prod(l.product_id)
     lines.push({ text: `${p.name_hu || '–'}: ${num(qtyOf(l))} ${p.unit || ''}`, bold: true })
+    if (hasPacking(l)) lines.push({ text: '  ' + packTextHu(l) })
     totals[p.unit || ''] = (totals[p.unit || ''] || 0) + qtyOf(l)
   })
   if (o.order_lines.length > 1) lines.push({ text: 'Összesen: ' + Object.entries(totals).map(([u, v]) => `${num(v)} ${u}`).join(' + ') })
@@ -766,7 +769,8 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
           return (
             <tr key={l.id}>
               <td className="dnote-i">{i + 1}</td>
-              <td><span className="dnote-prod">{t.pick(p)}</span>{p.code && <span className="dnote-code"> {p.code}</span>}{ingrLine(pinfo?.[l.product_id])}</td>
+              <td><span className="dnote-prod">{t.pick(p)}</span>{p.code && <span className="dnote-code"> {p.code}</span>}
+                {hasPacking(l) && <span className="dnote-pack"> · {packTextHu(l, info?.packing_bag_text)}</span>}{ingrLine(pinfo?.[l.product_id])}</td>
               <td className="dnote-qty"><b>{fmtNum(qtyOf(l), t.lang)}</b> <span>{p.unit}</span></td>
             </tr>
           )

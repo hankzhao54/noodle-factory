@@ -3,7 +3,9 @@ import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { Modal, Field, Empty, Loading, ErrorBox, PageHead, Status, Tabs, NumInput, useToast, errText } from '../components/ui'
-import QtyPicker, { cartTotal } from '../components/QtyPicker'
+import QtyPicker, { cartTotal, PackPicker, packOk } from '../components/QtyPicker'
+import { packFees, packText, lineFee, hasPacking } from '../lib/packing'
+import { usePublicInfo } from '../lib/publicInfo'
 
 export default function Orders() {
   const t = useT()
@@ -32,7 +34,7 @@ export default function Orders() {
   if (!data) return <div className="page"><ErrorBox error={error} /></div>
   const cust = id => data.customers.find(c => c.id === id) || {}
   const shown = data.orders.filter(o => tab === 'all' || (tab === 'open' ? ['submitted', 'confirmed', 'ready'].includes(o.status) : o.status === tab))
-  const total = o => o.order_lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
+  const total = o => o.order_lines.reduce((s, l) => s + l.qty * (Number(l.unit_price) + lineFee(l)), 0)
   const newCount = data.orders.filter(o => o.status === 'submitted').length
 
   return (
@@ -63,7 +65,7 @@ export default function Orders() {
               <td className="muted small">{data.names[o.created_by] || '–'}</td>
               <td className="muted small">{o.order_lines.map(l => {
                 const p = data.products.find(x => x.id === l.product_id) || {}
-                return `${t.pick(p)} ${fmtNum(l.qty, t.lang)}${p.unit || ''}`
+                return `${t.pick(p)} ${fmtNum(l.qty, t.lang)}${p.unit || ''}${hasPacking(l) ? ' 📦' : ''}`
               }).join(', ')}</td>
               <td className="num">{fmtFt(total(o), t.lang)}</td>
               <td><Status value={o.status} prefix="o" /></td>
@@ -83,6 +85,8 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   const t = useT()
   const toast = useToast()
   const prod = id => products.find(p => p.id === id) || {}
+  const fees = packFees(usePublicInfo())
+  const [packEdit, setPackEdit] = useState(null)          // { line, value } while changing a line's packing
   const [askCancel, setAskCancel] = useState(false)
   const [mode, setMode] = useState('view')                 // view | edit | split | date
   const [newDate, setNewDate] = useState(() => order.delivery_date < todayISO() ? todayISO() : order.delivery_date)
@@ -92,7 +96,14 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
   const [busy, setBusy] = useState(false)
   const changeable = !readOnly && ['submitted', 'confirmed', 'ready'].includes(order.status)
   const qtyOf = l => (l.id in edit ? edit[l.id] : Number(l.qty))
-  const total = order.order_lines.reduce((s, l) => s + (mode === 'edit' ? qtyOf(l) || 0 : l.qty) * l.unit_price, 0)
+  const total = order.order_lines.reduce((s, l) => s + (mode === 'edit' ? qtyOf(l) || 0 : l.qty) * (Number(l.unit_price) + lineFee(l)), 0)
+  async function savePacking() {
+    setBusy(true)
+    try {
+      await q(db.rpc('set_line_packing', { p_line: packEdit.line, p_vacuum: !!packEdit.value.vacuum, p_portion_g: packEdit.value.portion_g || null }))
+      toast(t('saved')); onDone()
+    } catch (e) { toast(errText(e), 'error'); setBusy(false) }
+  }
   async function saveEdit() {
     const changes = order.order_lines.filter(l => l.id in edit && Number(edit[l.id] || 0) !== Number(l.qty))
       .map(l => ({ line_id: l.id, qty: Number(edit[l.id] || 0) }))
@@ -148,12 +159,22 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
           <tr key={l.id} className={gone ? 'line-gone' : ''}>
             {mode === 'split' && <td><input type="checkbox" checked={pick.includes(l.id)} aria-label={t.pick(prod(l.product_id))}
               onChange={e => setPick(p => e.target.checked ? [...p, l.id] : p.filter(x => x !== l.id))} /></td>}
-            <td>{t.pick(prod(l.product_id))}</td>
+            <td>{t.pick(prod(l.product_id))}
+              {packEdit?.line === l.id
+                ? <div className="pack-edit"><PackPicker compact value={packEdit.value} fees={fees} internal={customer?.type === 'internal'} defaultG={prod(l.product_id).pack_size_g}
+                    onChange={v => setPackEdit({ line: l.id, value: v })} />
+                    <button type="button" className="btn btn-sm" onClick={() => setPackEdit(null)}>{t('cancel')}</button>
+                    <button type="button" className="btn btn-sm btn-primary" disabled={busy || !packOk(packEdit.value)} onClick={savePacking}>{t('save')}</button></div>
+                : <div className="small">
+                    {hasPacking(l) ? <span className="pack-tag">📦 {packText(t, l, fees.bag)}{lineFee(l) > 0 ? ` · +${fmtFt(lineFee(l), t.lang)}/kg` : ''}</span>
+                      : <span className="muted">{t('packNone')}</span>}
+                    {changeable && mode === 'view' && <button type="button" className="btn-link small" onClick={() => setPackEdit({ line: l.id, value: { vacuum: !!l.pack_vacuum, portion_g: l.portion_g ?? null } })}> {t('change')}</button>}
+                  </div>}</td>
             <td className="num">{mode === 'edit'
               ? <NumInput className="input-sm" value={q0} min={0} onChange={v => setEdit(e => ({ ...e, [l.id]: v ?? 0 }))} aria-label={`${t('qty')} ${t.pick(prod(l.product_id))}`} />
               : fmtNum(l.qty, t.lang)} <span className="unit">{prod(l.product_id).unit}</span></td>
             <td className="num muted">{fmtFt(l.unit_price, t.lang)}</td>
-            <td className="num">{fmtFt((Number(q0) || 0) * l.unit_price, t.lang)}</td>
+            <td className="num">{fmtFt((Number(q0) || 0) * (Number(l.unit_price) + lineFee(l)), t.lang)}</td>
             {mode === 'edit' && <td>{gone
               ? <button type="button" className="btn-link small" onClick={() => setEdit(e => ({ ...e, [l.id]: Number(l.qty) }))}>{t('undo')}</button>
               : <button type="button" className="btn-link small danger" onClick={() => setEdit(e => ({ ...e, [l.id]: 0 }))}>{t('cancelLine')}</button>}</td>}

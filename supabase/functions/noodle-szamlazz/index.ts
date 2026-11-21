@@ -4,7 +4,7 @@
 //   issue { customer_id, location_id, month: 'YYYY-MM', vat_rate, due_days, fulfillment_date?, dry_run? }
 //     → demo / dry run: { demo: true, xml, totals, problems }  (nothing is sent)
 //     → live:           { number, gross, file_path }           (invoice issued, PDF saved, row in noodle.invoices)
-// The lines are worked out here from the delivered orders (not taken from the browser).
+// The lines are worked out here from the delivered orders (not taken from the browser), plus packing fee lines.
 // Secret: SZAMLAZZ_AGENT_KEY (Számla Agent key, 42 characters). Without it the function runs in demo mode.
 // Settings (noodle.settings): szamlazz_einvoice ('true' / 'false'), szamlazz_send_email ('true' / 'false').
 import { agentError, invoiceXml, problems, totals, type Line } from './xml.ts'
@@ -86,7 +86,7 @@ Deno.serve(async req => {
       if (done.length) return json({ error: 'already_issued', number: done[0].number }, 409)
     }
 
-    const orders: any[] = await rest(`orders?select=no,delivery_date,order_lines(qty,delivered_qty,unit_price,product:products(name_hu,unit,sort))` +
+    const orders: any[] = await rest(`orders?select=no,delivery_date,order_lines(qty,delivered_qty,unit_price,vacuum_fee,portion_fee,product:products(name_hu,unit,sort))` +
       `&customer_id=eq.${cust.id}&status=eq.delivered&delivery_date=gte.${from}&delivery_date=lte.${to}` +
       `&location_id=${loc ? 'eq.' + loc : 'is.null'}&order=delivery_date`)
     // same grouping as the díjbekérő: per product and price
@@ -96,6 +96,16 @@ Deno.serve(async req => {
       const k = `${l.product?.name_hu}|${price}`
       groups[k] = groups[k] || { product: l.product?.name_hu, unit: l.product?.unit, sort: l.product?.sort || 0, unit_price: price, qty: 0 }
       groups[k].qty += qty
+    }
+    // packing fees: one line per kind and fee (kg × Ft/kg), after the products
+    for (const o of orders) for (const l of o.order_lines) {
+      const qty = Number(l.delivered_qty ?? l.qty)
+      for (const [kind, fee, name] of [['v', Number(l.vacuum_fee || 0), 'Vákuumcsomagolás'], ['p', Number(l.portion_fee || 0), 'Adagolás (porciózás)']] as const) {
+        if (!(fee > 0)) continue
+        const k = `pack:${kind}|${fee}`
+        groups[k] = groups[k] || { product: name, unit: 'kg', sort: 1e6 + (kind === 'p' ? 1 : 0), unit_price: fee, qty: 0 }
+        groups[k].qty += qty
+      }
     }
     const lines = Object.values(groups).filter(l => l.qty !== 0).sort((a, b) => a.sort - b.sort || a.unit_price - b.unit_price)
       .map(l => ({ product: l.product, unit: l.unit, qty: Math.round(l.qty * 1000) / 1000, unit_price: l.unit_price }))

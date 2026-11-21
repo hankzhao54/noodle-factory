@@ -5,6 +5,7 @@ import { useT, fmtNum, fmtFt, fmtDate } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead, Modal, Field, NumInput, useToast, errText } from '../components/ui'
 import { invoiceHtml, invoicePdfBlob } from '../lib/invoicePdf'
 import { deliverPdf } from '../lib/labelOutput'
+import { hasPacking, packTextHu } from '../lib/packing'
 
 // Month-end report: what went out, what was made, what it cost, what is left. Admins only.
 const lastMonth = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) }
@@ -201,7 +202,7 @@ async function openInvoice(x) {
   if (error) throw error
   deliverPdf(data, x.number)
 }
-const INV_KEYS = ['company_name', 'company_address', 'company_tax_no', 'company_reg_no', 'company_email', 'company_phone', 'company_bank', 'invoice_vat_rate', 'invoice_due_days']
+const INV_KEYS = ['packing_bag_text', 'company_name', 'company_address', 'company_tax_no', 'company_reg_no', 'company_email', 'company_phone', 'company_bank', 'invoice_vat_rate', 'invoice_due_days']
 function InvoiceDialog({ store, month, from, to, onClose, history = [], official, onSaved }) {
   const t = useT()
   const toast = useToast()
@@ -211,7 +212,7 @@ function InvoiceDialog({ store, month, from, to, onClose, history = [], official
       q(db.from('customers').select('id,name,address,vat_no,email,phone').eq('id', store.customer_id).single()),
       store.location_id ? q(db.from('customer_locations').select('id,name,address').eq('id', store.location_id).single()) : null,
       (() => {
-        let qq = db.from('orders').select('id,no,delivery_date,order_lines(qty,delivered_qty,unit_price,product:products(name_hu,unit,sort))')
+        let qq = db.from('orders').select('id,no,delivery_date,order_lines(qty,delivered_qty,unit_price,pack_vacuum,portion_g,vacuum_fee,portion_fee,product:products(name_hu,unit,sort))')
           .eq('customer_id', store.customer_id).eq('status', 'delivered').gte('delivery_date', from).lte('delivery_date', to).order('delivery_date')
         qq = store.location_id ? qq.eq('location_id', store.location_id) : qq.is('location_id', null)
         return q(qq)
@@ -236,6 +237,16 @@ function InvoiceDialog({ store, month, from, to, onClose, history = [], official
     groups[k] = groups[k] || { product: l.product?.name_hu, unit: l.product?.unit, sort: l.product?.sort || 0, unit_price: price, qty: 0 }
     groups[k].qty += qty
   }
+  // packing fees: one line per kind and fee (kg × Ft/kg)
+  for (const o of orders) for (const l of o.order_lines) {
+    const qty = Number(l.delivered_qty ?? l.qty)
+    for (const [kind, fee, name] of [['v', Number(l.vacuum_fee || 0), 'Vákuumcsomagolás'], ['p', Number(l.portion_fee || 0), 'Adagolás (porciózás)']]) {
+      if (!(fee > 0)) continue
+      const k = 'pack:' + kind + '|' + fee
+      groups[k] = groups[k] || { product: name, unit: 'kg', sort: 1e6 + (kind === 'p' ? 1 : 0), unit_price: fee, qty: 0 }
+      groups[k].qty += qty
+    }
+  }
   const lines = Object.values(groups).sort((a, b) => a.sort - b.sort || a.unit_price - b.unit_price)
   const net = lines.reduce((a, l) => a + l.qty * l.unit_price, 0)
   const noPrice = lines.some(l => !l.unit_price)
@@ -252,7 +263,7 @@ function InvoiceDialog({ store, month, from, to, onClose, history = [], official
         buyer: { name: cust.name, store: loc ? `${loc.name}${loc.address ? ' – ' + loc.address : ''}` : '', address: cust.address, tax_no: cust.vat_no, email: cust.email },
         number, issueDate: issue, periodFrom: from, periodTo: to, dueDate, vatRate, lines,
         deliveries: orders.map(o => ({ date: o.delivery_date, no: o.no,
-          items: o.order_lines.map(l => `${l.product?.name_hu} ${new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 3 }).format(Number(l.delivered_qty ?? l.qty))} ${l.product?.unit || 'kg'}`).join(', ') })),
+          items: o.order_lines.map(l => `${l.product?.name_hu} ${new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 3 }).format(Number(l.delivered_qty ?? l.qty))} ${l.product?.unit || 'kg'}${hasPacking(l) ? ' (' + packTextHu(l, s.packing_bag_text) + ')' : ''}`).join(', ') })),
       })
       const blob = await invoicePdfBlob(html)
       // keep the file and a record, so the report shows it was made and can open it again

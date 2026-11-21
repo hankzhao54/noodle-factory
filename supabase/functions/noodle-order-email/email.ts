@@ -44,6 +44,14 @@ const tr = (lang: Lang, key: string, vars: Record<string, string | number> = {})
   T[key][IDX[lang]].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''))
 export const asLang = (x: unknown): Lang => (x === 'en' || x === 'zh' || x === 'hu' ? x : 'hu')
 
+// packing of an order line: vacuum bags and / or portions of N g
+export function packStr(x: any, l: string) {
+  const v = x.pack_vacuum ? ({ zh: '真空包装', en: 'vacuum bags', hu: 'vákuum' } as any)[l] || 'vákuum' : ''
+  const g = x.portion_g ? ({ zh: `每份 ${x.portion_g} g`, en: `${x.portion_g} g portions`, hu: `${x.portion_g} g adag` } as any)[l] || `${x.portion_g} g` : ''
+  return [v, g].filter(Boolean).join(' + ')
+}
+
+
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
@@ -70,7 +78,7 @@ function render(p: any, lang: Lang, kind: string, showPrices: boolean): { html: 
   const o = p.order, c = p.customer, lines: any[] = p.lines || []
   const app = String(p.settings?.app_url || '').replace(/\/$/, '')
   const intro = tr(lang, kind === 'received' ? 'received_intro' : kind === 'confirmed' ? 'confirmed_intro' : 'factory_intro')
-  const total = lines.reduce((s, l) => s + Number(l.qty) * Number(l.unit_price || 0), 0)
+  const total = lines.reduce((s, l) => s + Number(l.qty) * (Number(l.unit_price || 0) + Number(l.pack_fee || 0)), 0)
   const hasPrices = showPrices && lines.some(l => Number(l.unit_price) > 0)
   const custLabel = c.name + (c.type === 'internal' ? ` (${tr(lang, 'internal')})` : '')
 
@@ -84,7 +92,7 @@ function render(p: any, lang: Lang, kind: string, showPrices: boolean): { html: 
 
   const td = 'padding:8px 10px;border-bottom:1px solid #e5e7e4;'
   const rows = lines.map(l => `<tr>
-      <td style="${td}">${esc(pickName(l, lang))}</td>
+      <td style="${td}">${esc(pickName(l, lang))}${packStr(l, lang) ? `<div style="color:#5b6770;font-size:12px">📦 ${esc(packStr(l, lang))}${hasPrices && Number(l.pack_fee) > 0 ? ` (+${esc(fmtFt(Number(l.pack_fee), lang))}/kg)` : ''}</div>` : ''}</td>
       <td style="${td}text-align:right;white-space:nowrap">${esc(fmtNum(Number(l.qty), lang))} ${esc(l.unit)}</td>
       ${hasPrices ? `<td style="${td}text-align:right;white-space:nowrap">${esc(fmtFt(Number(l.unit_price || 0), lang))}</td>` : ''}
     </tr>`).join('')
@@ -119,7 +127,8 @@ function render(p: any, lang: Lang, kind: string, showPrices: boolean): { html: 
     intro, '',
     ...facts.map(([k, v]) => `${k}: ${v}`), '',
     ...lines.map(l => `- ${pickName(l, lang)}: ${fmtNum(Number(l.qty), lang)} ${l.unit}` +
-      (hasPrices ? ` × ${fmtFt(Number(l.unit_price || 0), lang)}` : '')),
+      (hasPrices ? ` × ${fmtFt(Number(l.unit_price || 0), lang)}` : '') +
+      (packStr(l, lang) ? ` · ${packStr(l, lang)}${hasPrices && Number(l.pack_fee) > 0 ? ` (+${fmtFt(Number(l.pack_fee), lang)}/kg)` : ''}` : '')),
     ...(hasPrices ? ['', `${tr(lang, 'total')} (${tr(lang, 'net')}): ${fmtFt(total, lang)}`] : []),
     ...(o.notes ? ['', `${tr(lang, 'notes')}: ${o.notes}`] : []),
     ...(app ? ['', `${linkLabel}: ${link}`] : []),

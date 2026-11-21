@@ -26,6 +26,9 @@ export default function Customers() {
         { key: 'contact_person', label: t('contact') },
         { key: 'phone', label: t('phone') },
         { key: 'address', label: t('address') },
+        { key: 'pack_vacuum', label: t('packing'), render: r => r.pack_vacuum || r.portion_g
+            ? '📦 ' + [r.pack_vacuum && t('packVacuumShort', { bag: '' }).trim(), r.portion_g && t('packPortionShort', { g: r.portion_g })].filter(Boolean).join(' + ')
+            : <span className="muted">–</span> },
         { key: 'delivery_weekdays', label: t('deliveryDays'), render: r => r.delivery_weekdays?.length ? r.delivery_weekdays.map(d => dayName(t.lang, d)).join(', ') : <span className="muted">{t('anyDay')}</span> },
       ]}
       fields={[
@@ -40,6 +43,8 @@ export default function Customers() {
         { key: 'address', label: t('address'), span: 2 },
         { key: 'delivery_notes', label: t('deliveryNotes'), type: 'textarea', span: 2 },
         { key: 'delivery_weekdays', label: t('deliveryDays'), type: 'weekdays', span: 2, hint: t('deliveryDaysHint') },
+        { key: 'pack_vacuum', label: t('packDefaultVacuum'), type: 'bool', hint: t('packDefaultHint') },
+        { key: 'portion_g', label: t('packDefaultPortion'), type: 'number', hint: t('packDefaultPortionHint') },
         { key: 'ramen_lead_place_id', label: t('ramenLead') },
         { key: 'active', label: t('active'), type: 'bool' },
       ]}

@@ -5,7 +5,8 @@ import { useAuth } from '../lib/auth'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
 import { LangSwitch } from '../App'
 import { Loading, ErrorBox, Empty, Status, Tabs, NumInput, Modal, Field, useToast, errText } from '../components/ui'
-import QtyPicker, { cartTotal } from '../components/QtyPicker'
+import QtyPicker, { cartTotal, packOk } from '../components/QtyPicker'
+import { packFees, packText, lineFee, hasPacking } from '../lib/packing'
 import { dateProblem, nextDates, deliveryDays, dayName } from '../lib/orderRules'
 import InstallHint from '../components/InstallHint'
 import { LegalLinks } from '../legal/LegalPage'
@@ -19,11 +20,12 @@ export default function Portal() {
   const needTerms = profile?.role === 'customer' && info && profile.terms_version !== info.terms_version
   const [tab, setTab] = useState('order')
   const [qty, setQty] = useState({})
+  const [pack, setPack] = useState({})   // product id → { vacuum, portion_g }; missing = the customer's default
   const { data, error, reload } = useData(async () => {
     const [me, catalog, orders, rules, pinfo, editInfo, requests] = await Promise.all([
       q(db.from('customers').select('*').maybeSingle()),
       q(db.from('my_catalog').select('*').order('sort')),
-      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, urgent, store:customer_locations(name), order_lines(id, product_id, qty' + (isRestaurant ? '' : ', unit_price') + ')').order('created_at', { ascending: false }).limit(50)),
+      q(db.from('orders').select('id, no, status, delivery_date, notes, created_at, delivered_at, received_by, urgent, store:customer_locations(name), order_lines(id, product_id, qty, pack_vacuum, portion_g' + (isRestaurant ? '' : ', unit_price, vacuum_fee, portion_fee') + ')').order('created_at', { ascending: false }).limit(50)),
       q(db.rpc('order_rules')).catch(() => null),
       q(db.rpc('product_info')).catch(() => null),
       q(db.rpc('my_order_edit_info')).catch(() => ({})),
@@ -51,13 +53,14 @@ export default function Portal() {
         <CompanyDetails me={data.me} storeOnly={!!data.rules?.my_location} reload={reload} />
       ) : tab === 'order' ? (
         <OrderSheet blocked={needTerms} info={info} pinfo={data.pinfo} internal={isRestaurant} catalog={data.catalog} me={data.me} rules={data.rules} qty={qty} setQty={setQty}
-          onPlaced={() => { setQty({}); reload(); setTab('history') }} />
+          pack={pack} setPack={setPack} onPlaced={() => { setQty({}); setPack({}); reload(); setTab('history') }} />
       ) : (
-        <History internal={isRestaurant} orders={data.orders} catalog={data.catalog} editInfo={data.editInfo} requests={data.requests} reload={reload}
+        <History internal={isRestaurant} fees={packFees(info)} orders={data.orders} catalog={data.catalog} editInfo={data.editInfo} requests={data.requests} reload={reload}
           onAgain={o => {
-            const next = {}
-            o.order_lines.forEach(l => { if (data.catalog.some(p => p.id === l.product_id)) next[l.product_id] = Number(l.qty) })
-            setQty(next); setTab('order')
+            const next = {}, nextPack = {}
+            o.order_lines.forEach(l => { if (data.catalog.some(p => p.id === l.product_id)) {
+              next[l.product_id] = Number(l.qty); nextPack[l.product_id] = { vacuum: !!l.pack_vacuum, portion_g: l.portion_g ?? null } } })
+            setQty(next); setPack(nextPack); setTab('order')
           }} />
       )}
       <LegalLinks className="portal-legal" />
@@ -150,7 +153,7 @@ function TermsBanner({ first, onDone }) {
 }
 
 const STORE_KEY = 'nf-store'
-function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRules, qty, setQty, onPlaced }) {
+function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRules, qty, setQty, pack, setPack, onPlaced }) {
   const t = useT()
   const toast = useToast()
   // companies with several stores: pick the store first (store accounts are fixed to theirs)
@@ -185,15 +188,19 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
   }
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
-  const total = cartTotal(catalog, qty)
+  const fees = packFees(info)
+  const packDef = { vacuum: !!me.pack_vacuum, portion_g: me.portion_g ?? null }
+  const packOf = id => pack[id] || packDef
+  const total = cartTotal(catalog, qty, pack, packDef, internal ? null : fees)
   const count = Object.keys(qty).length
+  const packBad = Object.keys(qty).some(id => !packOk(packOf(id)))
 
   async function place() {
     setBusy(true)
     try {
       await q(db.rpc('place_order', {
         p_delivery_date: date, p_notes: notes || null, p_location_id: storeId || null, p_urgent: urgent,
-        p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q })),
+        p_lines: Object.entries(qty).map(([product_id, q]) => ({ product_id, qty: q, pack_vacuum: !!packOf(product_id).vacuum, portion_g: packOf(product_id).portion_g || null })),
       }))
       toast(t(urgent ? 'urgentPlaced' : internal ? 'orderPlacedInternal' : 'orderPlaced')); setNotes(''); setUrgent(false); onPlaced()
     } catch (e) {
@@ -238,6 +245,7 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
         {(store ? store.address : me.address) && <p className="muted small">{store ? `${store.name} · ${store.address}` : me.address}</p>}
       </div>
       {catalog.length === 0 ? <Empty /> : <QtyPicker items={catalog} qty={qty} setQty={setQty} info={pinfo}
+        pack={pack} setPack={setPack} packInfo={{ def: packDef, fees, internal }}
         producer={info ? [info.company_name, info.company_address].filter(Boolean).join(', ') : null} />}
       <label className="field"><span className="field-label">{t('notes')}</span>
         <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></label>
@@ -246,13 +254,13 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
           <b>{internal ? t('itemsN', { n: count }) : `${fmtFt(total, t.lang)} ${t('netPrice')}`}</b>
           <span className="muted small">{internal ? (count ? t('internalOrderNote') : t('emptyCart')) : <>{count ? t('itemsN', { n: count }) : t('emptyCart')} · {t('noPayment')}</>}</span>
         </div>
-        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked || needStore} onClick={place}>{urgent ? '🚨 ' + t('placeUrgent') : t('placeOrder')}</button>
+        <button className="btn btn-primary" disabled={!count || busy || !!problem || blocked || needStore || packBad} onClick={place}>{urgent ? '🚨 ' + t('placeUrgent') : t('placeOrder')}</button>
       </div>
     </div>
   )
 }
 
-function History({ internal, orders, catalog, editInfo, requests = [], reload, onAgain }) {
+function History({ internal, fees, orders, catalog, editInfo, requests = [], reload, onAgain }) {
   const t = useT()
   const toast = useToast()
   const [openId, setOpenId] = useState(null)
@@ -282,7 +290,7 @@ function History({ internal, orders, catalog, editInfo, requests = [], reload, o
   return (
     <ul className="history">
       {orders.map(o => {
-        const total = o.order_lines.reduce((s, l) => s + l.qty * (l.unit_price || 0), 0)
+        const total = o.order_lines.reduce((s, l) => s + l.qty * ((l.unit_price || 0) + lineFee(l, fees)), 0)
         const open = openId === o.id
         const info = editInfo?.[o.id]                       // present = this account may still change it
         const locked = new Set(info?.locked || [])
@@ -306,7 +314,8 @@ function History({ internal, orders, catalog, editInfo, requests = [], reload, o
                 <ul>{o.order_lines.map(l => {
                   const gone = isEditing && !(Number(q0(l)) > 0)
                   return (
-                  <li key={l.id} className={gone ? 'line-gone' : ''}><span>{t.pick(prod(l.product_id)) || '–'}</span>
+                  <li key={l.id} className={gone ? 'line-gone' : ''}><span>{t.pick(prod(l.product_id)) || '–'}
+                    {hasPacking(l) && <span className="pack-tag">📦 {packText(t, l, fees.bag)}{!internal && lineFee(l, fees) > 0 ? ` · +${fmtFt(lineFee(l, fees), t.lang)}/kg` : ''}</span>}</span>
                     <span className="num">
                       {isEditing && internal && !locked.has(l.id) && !gone
                         ? <><NumInput className="input-sm" value={q0(l)} min={0} aria-label={`${t('qty')} ${t.pick(prod(l.product_id))}`}

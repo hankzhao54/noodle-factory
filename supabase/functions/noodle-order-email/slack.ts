@@ -1,5 +1,5 @@
 // Slack message for an order event (pure: no network). Posted to an Incoming Webhook.
-import { asLang, type Lang } from './email.ts'
+import { asLang, packStr, type Lang } from './email.ts'
 
 const T: Record<string, [string, string, string]> = {
   placed: ['Új rendelés', 'New order', '新订单'],
@@ -58,8 +58,8 @@ export function buildSlack(p: any, event: string, detail?: string) {
       ? `:pencil2: *${tr(l, 'changed')} #${o.no}* · ${esc(c.name)}`
       : `:ramen: *${tr(l, 'placed')} #${o.no}* · ${esc(c.name)} (${tr(l, internal ? 'internal' : 'wholesale')})`
   const urgent = o.urgent && event !== 'cancelled' ? `:rotating_light: *${tr(l, 'urgent')}* ` : ''
-  const lines = (p.lines || []).map((x: any) => `• ${esc(name(x))} × ${num(Number(x.qty), l)} ${esc(x.unit)}`)
-  const total = (p.lines || []).reduce((t: number, x: any) => t + Number(x.qty) * Number(x.unit_price || 0), 0)
+  const lines = (p.lines || []).map((x: any) => `• ${esc(name(x))} × ${num(Number(x.qty), l)} ${esc(x.unit)}` + (packStr(x, l) ? ` · :package: ${esc(packStr(x, l))}` : ''))
+  const total = (p.lines || []).reduce((t: number, x: any) => t + Number(x.qty) * (Number(x.unit_price || 0) + Number(x.pack_fee || 0)), 0)
   const parts = [
     urgent + head,
     `${tr(l, 'delivery')}: *${date(o.delivery_date, l)}*` + (event === 'placed' ? ` · ${tr(l, o.status === 'confirmed' ? 'confirmed' : 'submitted')}` : ''),
