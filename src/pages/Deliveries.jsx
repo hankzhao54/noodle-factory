@@ -5,6 +5,7 @@ import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate, fmtFt, translate, pickName } from '../lib/i18n'
 import { compressImage } from '../lib/image'
 import { usePublicInfo } from '../lib/publicInfo'
+import OrderNote from '../components/OrderNote'
 import { packFees, packText, packTextHu, lineFee, hasPacking, lineBags } from '../lib/packing'
 import { allergenName, drawSimpleLabel, labelFontsReady, readPaper, LABEL_SIZES } from '../components/LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
@@ -22,7 +23,7 @@ export default function Deliveries() {
   // company details for the notes: load them now, not when printing starts (they would arrive too late)
   const info = usePublicInfo()
   const { data, loading, error, reload } = useData(async () => {
-    const [runs, orders, customers, products, stock, pinfo, earlier] = await Promise.all([
+    const [runs, orders, customers, products, stock, pinfo, earlier, later] = await Promise.all([
       q(db.from('deliveries').select('*').eq('delivery_date', date).order('created_at')),
       q(db.from('orders').select('*, order_lines(*), store:customer_locations(name,address,contact_person,phone,notes)').eq('delivery_date', date).neq('status', 'cancelled').order('created_at')),
       q(db.from('customers').select('*').order('name')),
@@ -31,8 +32,11 @@ export default function Deliveries() {
       q(db.rpc('product_info')).catch(() => ({})),
       // not yet delivered orders of earlier days still need the same stock
       q(db.from('orders').select('order_lines(product_id,qty)').lt('delivery_date', date).in('status', OPEN)),
+      // open orders of the next days, which can be delivered early
+      q(db.from('orders').select('id,no,customer_id,delivery_date,status,urgent,store:customer_locations(name),order_lines(product_id,qty)')
+        .gt('delivery_date', date).lte('delivery_date', addDaysISO(date, 14)).in('status', OPEN).order('delivery_date').order('no')),
     ])
-    return { runs, orders, customers, products, stock, pinfo: pinfo || {}, earlier }
+    return { runs, orders, customers, products, stock, pinfo: pinfo || {}, earlier, later }
   }, [date])
 
   useEffect(() => {
@@ -143,6 +147,8 @@ export default function Deliveries() {
         </section>
       ))}
 
+      <EarlyOrders date={date} ctx={ctx} />
+
       {modal?.kind === 'new' && <NewDelivery date={date} ctx={ctx} onClose={() => setModal(null)} />}
       {modal?.kind === 'run' && <RunForm date={date} run={modal.run} onClose={() => setModal(null)} onDone={() => { setModal(null); reload() }} />}
       {modal?.kind === 'deliver' && <DeliverDialog order={modal.order} ctx={ctx} onClose={() => setModal(null)} />}
@@ -227,7 +233,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
           {c.phone && <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a>}
         </dd></div>}
         {c.delivery_notes && <div><dt>{t('deliveryNotes')}</dt><dd className="note-inline">{c.delivery_notes}</dd></div>}
-        {o.notes && <div><dt>{t('notes')}</dt><dd className="note-inline">{o.notes}</dd></div>}
+        {o.notes && <div><dt>{t('notes')}</dt><dd><OrderNote order={o} onSaved={ctx.reload} /></dd></div>}
       </dl>
 
       <table className="stop-items">
@@ -268,6 +274,44 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         {!delivered && <button className="btn btn-sm btn-primary" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>{t('confirmDelivered')}</button>}
       </footer>
     </article>
+  )
+}
+
+/* ---------------- deliver early: open orders of the next days can be moved to this day ---------------- */
+function addDaysISO(d, n) { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10) }
+function EarlyOrders({ date, ctx }) {
+  const t = useT()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(null)
+  const list = ctx.data.later || []
+  if (!list.length) return null
+  async function move(o) {
+    setBusy(o.id)
+    try { await q(db.rpc('change_order_date', { p_order: o.id, p_date: date })); toast(t('earlyMoved', { no: o.no })); ctx.reload() }
+    catch (e) { toast(errText(e), 'error') }
+    setBusy(null)
+  }
+  return (
+    <section className="run-group early-orders">
+      <button type="button" className="btn-link" onClick={() => setOpen(x => !x)}>{open ? '▾' : '▸'} {t('earlyTitle', { n: list.length })}</button>
+      {open && <>
+        <p className="muted small">{t('earlyHint')}</p>
+        <div className="table-wrap"><table className="table compact">
+          <tbody>{list.map(o => {
+            const c = ctx.cust(o.customer_id) || {}
+            return (
+              <tr key={o.id}>
+                <td className="muted">{fmtDate(o.delivery_date, t.lang)}</td>
+                <td><b>#{o.no} {c.name}</b>{o.store?.name ? ` · ${o.store.name}` : ''}{o.urgent && <span className="tag tag-urgent">🚨</span>}</td>
+                <td className="small">{o.order_lines.map(l => `${t.pick(ctx.prod(l.product_id))} ${fmtNum(l.qty, t.lang)}`).join(', ')}</td>
+                <td className="act"><button className="btn btn-sm" disabled={busy === o.id} onClick={() => move(o)}>{t('earlyMove')}</button></td>
+              </tr>
+            )
+          })}</tbody>
+        </table></div>
+      </>}
+    </section>
   )
 }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import OrderNote from '../components/OrderNote'
 import { db, q, todayISO } from '../lib/supabase'
 import { useData } from '../lib/useData'
 import { useT, fmtFt, fmtNum, fmtDate } from '../lib/i18n'
@@ -182,7 +183,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
         })}</tbody>
         <tfoot><tr><td colSpan={3}>{t('total')}</td><td className="num"><b>{fmtFt(total, t.lang)}</b></td></tr></tfoot>
       </table>
-      {order.notes && <p className="note-box">{order.notes}</p>}
+      {order.notes && <p className="note-box"><OrderNote order={order} className="" readOnly={readOnly} onSaved={onDone} /></p>}
       {mode === 'edit' && (
         <div className="modal-foot">
           <span className="grow" />
