@@ -20,7 +20,7 @@ export default function Inventory() {
     return { materials, products, lots }
   })
   const lotsOf = id => (data?.lots || []).filter(l => l.material_id === id)
-  const match = r => !term || [r.name_zh, r.name_en, r.name_hu, r.code, r.category].some(x => x?.toLowerCase().includes(term.toLowerCase()))
+  const match = r => !term || [r.name_zh, r.name_en, r.name_hu, r.code, r.category].some(x => x?.replace(/\u00a0/g, ' ').toLowerCase().includes(term.toLowerCase()))
 
   return (
     <div className="page">

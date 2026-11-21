@@ -26,7 +26,7 @@ export default function CrudPage({ table, title, columns, fields, defaults = {},
 
   const rows = (data || [])
     .filter(r => showInactive || r.active !== false)
-    .filter(r => !term || searchKeys.some(k => String(r[k] ?? '').toLowerCase().includes(term.toLowerCase())))
+    .filter(r => !term || searchKeys.some(k => String(r[k] ?? '').replace(/\u00a0/g, ' ').toLowerCase().includes(term.toLowerCase())))
 
   return (
     <div className="page">
