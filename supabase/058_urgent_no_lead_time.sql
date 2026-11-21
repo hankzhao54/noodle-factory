@@ -1,5 +1,5 @@
 -- =====================================================================
--- 058 · 紧急订单不受截单时间 / 提前天数限制（今天也能下）；工厂休息日照样不行
+-- 058 · 紧急订单不限制任何日期（今天、休息日都行，只是不能是过去），需要工厂确认
 -- =====================================================================
 create or replace function noodle.place_order(p_delivery_date date, p_lines jsonb, p_notes text default null, p_customer_id uuid default null,
                                               p_location_id uuid default null, p_urgent boolean default false)
@@ -36,8 +36,8 @@ begin
     v_problem := noodle.delivery_date_problem(v_cust, p_delivery_date, v_loc);
     if coalesce(p_urgent, false) then
       if v_mode = 'off' or (v_mode = 'internal' and not v_internal) then raise exception 'urgent orders not available'; end if;
-      -- urgent: delivery days, cut-off time and lead days do not apply; closed days still do
-      if v_problem in ('no_delivery_day', 'not_your_day', 'too_late') then v_problem := ''; end if;
+      -- urgent: no date rule applies (only not in the past); the factory confirms it
+      v_problem := '';
       v_urgent := true;
     end if;
     if v_problem <> '' then raise exception 'delivery date not allowed: %', v_problem; end if;

@@ -93,9 +93,9 @@ function OrderSheet({ blocked, info, pinfo, internal, catalog, me, rules: baseRu
   const store = stores.find(l => l.id === storeId)
   // the store's delivery weekdays (if set) replace the company's
   const rules = baseRules && store?.weekdays?.length ? { ...baseRules, my_weekdays: store.weekdays } : baseRules
-  // urgent order: any day from today that is not closed — no delivery-day, cut-off or lead-day limit
+  // urgent order: any day from today, closed days included — the factory confirms it
   const [urgent, setUrgent] = useState(false)
-  const urgentRules = rules && { ...rules, earliest: todayISO(), weekdays: '', my_weekdays: [] }
+  const urgentRules = rules && { ...rules, earliest: todayISO(), weekdays: '', my_weekdays: [], closed_dates: '' }
   const options = nextDates(urgent ? urgentRules : rules, 6)
   const [date, setDate] = useState(() => nextDates(rules, 1)[0] || todayISO(1))
   function pickStore(id) {

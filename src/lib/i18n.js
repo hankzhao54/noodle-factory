@@ -593,7 +593,7 @@ const D = {
   printAllNotes: ['打印全部送货单', 'All delivery notes', 'Összes szállítólevél'],
   urgent: ['紧急', 'Urgent', 'Sürgős'],
   urgentOrder: ['紧急订单', 'Urgent order', 'Sürgős rendelés'],
-  urgentNote: ['紧急订单可以选任何一天，今天也行，不受送货日、截单时间和提前天数限制；需要工厂确认后才算数。', 'An urgent order can be for any day, even today — no delivery-day, cut-off or lead-time limit. It counts once the factory confirms it.', 'Sürgős rendelés bármelyik napra leadható, akár mára is — szállítási nap, határidő és előrendelési idő nélkül. A gyár visszaigazolása után érvényes.'],
+  urgentNote: ['紧急订单可以选任何一天（今天、休息日也行），需要工厂确认后才算数。', 'An urgent order can be for any day, even today or a closed day. It counts once the factory confirms it.', 'Sürgős rendelés bármelyik napra leadható, akár mára vagy szünnapra is. A gyár visszaigazolása után érvényes.'],
   urgentHint: ['急用的话可以点上面的「紧急订单」。', 'If it is urgent, use “Urgent order” above.', 'Ha sürgős, használja a „Sürgős rendelés” gombot.'],
   placeUrgent: ['下紧急订单', 'Place urgent order', 'Sürgős rendelés leadása'],
   urgentPlaced: ['紧急订单已提交，等工厂确认', 'Urgent order sent — waiting for the factory to confirm', 'Sürgős rendelés elküldve — visszaigazolásra vár'],
