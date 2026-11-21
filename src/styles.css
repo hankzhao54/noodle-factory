@@ -642,3 +642,11 @@ textarea { resize: vertical; }
 .pack-tag { display: block; font-size: 12px; color: var(--ink-2, #5b6770); }
 .pack-edit { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
 .dnote-pack { font-size: 0.9em; font-weight: 600; }
+/* store use trend (reports) */
+.trend-chart { width: 100%; overflow-x: auto; color: var(--ink-2); }
+.trend-chart svg { width: 100%; min-width: 520px; height: auto; display: block; }
+.trend-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; }
+.trend-legend button { border: 0; background: none; padding: 2px 0; cursor: pointer; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+.trend-legend button.off { opacity: .35; text-decoration: line-through; }
+.trend-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.panel .panel { box-shadow: none; border: 0; padding: 0; margin-top: 10px; }

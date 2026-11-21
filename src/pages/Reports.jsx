@@ -38,6 +38,7 @@ export default function Reports() {
   const presets = [
     [t('thisMonth'), monthStart(), todayISO()],
     [t('last30'), todayISO(-29), todayISO()],
+    [t('last12w'), todayISO(-83), todayISO()],
     [t('thisYear'), todayISO().slice(0, 4) + '-01-01', todayISO()],
   ]
 
@@ -168,6 +169,8 @@ function ReportBody({ data, range }) {
             fmtNum(storeRows.reduce((a, r) => a + r.qty, 0), t.lang), fmtFt(storeRows.reduce((a, r) => a + r.val, 0), t.lang),
             fmtFt(storeRows.reduce((a, r) => a + r.fee, 0), t.lang), fmtFt(storeRows.reduce((a, r) => a + r.val + r.fee, 0), t.lang)]] : [])]} />
 
+      <StoreTrend data={data} range={range} />
+
       <Section title={t('repSalesProduct')} file={`sales_by_product_${range}`}
         head={[t('name'), t('qty'), t('revenueNet'), t('avgPrice')]}
         rows={sorted(byProd, 'qty').map(([id, x]) => { const p = byId(data.products, id); return [t.pick(p), `${fmtNum(x.qty, t.lang)} ${p.unit || ''}`, fmtFt(x.val, t.lang), x.qty ? fmtFt(x.val / x.qty, t.lang) : '–'] })}
@@ -214,6 +217,87 @@ function Section({ title, note, head, rows, bars, barCol, file }) {
           ))}</tbody>
         </table></div>
       )}
+    </section>
+  )
+}
+
+/* ---------------- how each restaurant / store's use changes: kg per week (or per day for short ranges) ---------------- */
+const TREND_COLORS = ['#2F6FDE', '#D9480F', '#2B8A3E', '#AE3EC9', '#E8A400', '#1098AD', '#C2255C', '#5C7CFA', '#868E96', '#74B816']
+function isoMonday(d) { const x = new Date(d + 'T12:00:00'); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return x.toISOString().slice(0, 10) }
+function addDays(d, n) { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10) }
+
+function StoreTrend({ data, range }) {
+  const t = useT()
+  const [from, to] = range.split('_')
+  const days = Math.round((new Date(to) - new Date(from)) / 864e5) + 1
+  const daily = days <= 14
+  const [prod, setProd] = useState('all')
+  const [hidden, setHidden] = useState({})
+  const byId = (list, id) => list.find(x => x.id === id) || {}
+
+  // periods
+  const periods = []
+  for (let d = daily ? from : isoMonday(from); d <= to; d = addDays(d, daily ? 1 : 7)) periods.push(d)
+  const periodOf = d => (daily ? d : isoMonday(d))
+  const prods = [...new Set(data.orders.flatMap(o => o.order_lines.map(l => l.product_id)))]
+    .map(id => byId(data.products, id)).sort((a, b) => (a.sort || 0) - (b.sort || 0))
+
+  // series per store: { key, name, q: { period: kg } }
+  const series = new Map()
+  for (const o of data.orders) for (const l of o.order_lines) {
+    if (prod !== 'all' && l.product_id !== prod) continue
+    const k = o.customer_id + '|' + (o.location_id || '')
+    const c = byId(data.customers, o.customer_id)
+    const s = series.get(k) || { key: k, name: c.name + (o.store?.name ? ` · ${o.store.name}` : ''), q: {}, total: 0 }
+    const per = periodOf(o.delivery_date); const qty = Number(l.delivered_qty ?? l.qty)
+    s.q[per] = (s.q[per] || 0) + qty; s.total += qty
+    series.set(k, s)
+  }
+  const list = [...series.values()].sort((a, b) => b.total - a.total)
+  list.forEach((s, i) => { s.color = TREND_COLORS[i % TREND_COLORS.length] })
+  const shown = list.filter(s => !hidden[s.key])
+  const max = Math.max(1, ...shown.flatMap(s => periods.map(p => s.q[p] || 0)))
+  // a week is shown by its Monday
+  const label = p => new Date(p + 'T12:00:00').toLocaleDateString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'numeric', day: 'numeric' })
+
+  // simple SVG line chart
+  const W = 760, H = 240, L = 44, R = 12, T = 12, B = 28
+  const x = i => L + (periods.length <= 1 ? (W - L - R) / 2 : i * (W - L - R) / (periods.length - 1))
+  const y = v => T + (H - T - B) * (1 - v / max)
+  const ticks = [0, max / 2, max]
+  const every = Math.max(1, Math.ceil(periods.length / 10))
+
+  if (!list.length) return null
+  return (
+    <section className="panel">
+      <div className="panel-head"><h2>{t('trendTitle')}</h2>
+        <span className="muted small">{daily ? t('trendPerDay') : t('trendPerWeek')}</span></div>
+      <div className="date-chips">
+        <button type="button" className={prod === 'all' ? 'chip on' : 'chip'} onClick={() => setProd('all')}>{t('allProducts')}</button>
+        {prods.map(p => <button key={p.id} type="button" className={prod === p.id ? 'chip on' : 'chip'} onClick={() => setProd(p.id)}>{t.pick(p)}</button>)}
+      </div>
+      <div className="trend-chart">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('trendTitle')}>
+          {ticks.map((v, i) => <g key={i}>
+            <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="currentColor" opacity=".12" />
+            <text x={L - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="currentColor" opacity=".6">{fmtNum(Math.round(v), t.lang)}</text>
+          </g>)}
+          {periods.map((p, i) => i % every === 0 && <text key={p} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="currentColor" opacity=".6">{label(p)}</text>)}
+          {shown.map(s => <g key={s.key}>
+            <polyline fill="none" stroke={s.color} strokeWidth="2.2" strokeLinejoin="round"
+              points={periods.map((p, i) => `${x(i)},${y(s.q[p] || 0)}`).join(' ')} />
+            {periods.map((p, i) => <circle key={p} cx={x(i)} cy={y(s.q[p] || 0)} r="3" fill={s.color}>
+              <title>{`${s.name} · ${label(p)} · ${fmtNum(s.q[p] || 0, t.lang)} kg`}</title></circle>)}
+          </g>)}
+        </svg>
+      </div>
+      <div className="trend-legend">{list.map(s => (
+        <button key={s.key} type="button" className={hidden[s.key] ? 'off' : ''} onClick={() => setHidden(h => ({ ...h, [s.key]: !h[s.key] }))}>
+          <i style={{ background: s.color }} />{s.name} <span className="muted">{fmtNum(s.total, t.lang)} kg</span>
+        </button>))}</div>
+      <Section title={t('trendTable')} file={`store_trend_${prod}_${range}`}
+        head={[t('customer'), ...periods.map(label), t('total')]}
+        rows={list.map(s => [s.name, ...periods.map(p => s.q[p] ? fmtNum(s.q[p], t.lang) : '–'), fmtNum(s.total, t.lang)])} />
     </section>
   )
 }
