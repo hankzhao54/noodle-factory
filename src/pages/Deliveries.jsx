@@ -5,7 +5,7 @@ import { useData } from '../lib/useData'
 import { useT, fmtNum, fmtDate, fmtFt, translate, pickName } from '../lib/i18n'
 import { compressImage } from '../lib/image'
 import { usePublicInfo } from '../lib/publicInfo'
-import { packFees, packText, packTextHu, lineFee, hasPacking } from '../lib/packing'
+import { packFees, packText, packTextHu, lineFee, hasPacking, lineBags } from '../lib/packing'
 import { allergenName, drawSimpleLabel, labelFontsReady, readPaper, LABEL_SIZES } from '../components/LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 import { Modal, Field, Loading, ErrorBox, PageHead, Status, NumInput, useToast, errText } from '../components/ui'
@@ -203,7 +203,8 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
   const delivered = o.status === 'delivered'
   const internal = c.type === 'internal'
   const total = o.order_lines.reduce((s, l) => s + Number(delivered ? l.delivered_qty ?? l.qty : l.qty) * (Number(l.unit_price || 0) + lineFee(l)), 0)
-  const bag = packFees(usePublicInfo()).bag
+  const fees = packFees(usePublicInfo()), bag = fees.bag
+  const custRow = ctx.cust ? ctx.cust(o.customer_id) : null
 
   return (
     <article className={`stop-card ${delivered ? 'is-done' : ''}`}>
@@ -235,7 +236,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
           const sh = !delivered && ctx.lineShort[l.id]
           return (
             <tr key={l.id}>
-              <td>{t.pick(p)}{hasPacking(l) && <div className="pack-tag">📦 {packText(t, l, bag)}</div>}</td>
+              <td>{t.pick(p)}{hasPacking(l) && <div className="pack-tag">📦 {packText(t, l, bag)}{lineBags(l, custRow, fees) > 0 && <b> · {t('bagsN', { n: lineBags(l, custRow, fees) })}</b>}</div>}</td>
               <td className="num">
                 {delivered && l.delivered_qty != null && Number(l.delivered_qty) !== Number(l.qty)
                   ? <><s className="muted">{fmtNum(l.qty, t.lang)}</s> <b>{fmtNum(l.delivered_qty, t.lang)}</b></>

@@ -45,6 +45,8 @@ export default function Customers() {
         { key: 'delivery_weekdays', label: t('deliveryDays'), type: 'weekdays', span: 2, hint: t('deliveryDaysHint') },
         { key: 'pack_vacuum', label: t('packDefaultVacuum'), type: 'bool', hint: t('packDefaultHint') },
         { key: 'portion_g', label: t('packDefaultPortion'), type: 'number', hint: t('packDefaultPortionHint') },
+        { key: 'portions_per_bag', label: t('packPerBag'), type: 'number', hint: t('packPerBagHint') },
+        { key: 'bag_kg', label: t('packBagKg'), type: 'number', hint: t('packBagKgHint') },
         { key: 'ramen_lead_place_id', label: t('ramenLead') },
         { key: 'active', label: t('active'), type: 'bool' },
       ]}

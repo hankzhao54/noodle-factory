@@ -9,7 +9,7 @@ import { refreshPublicInfo } from '../lib/publicInfo'
 import { LEGAL } from '../legal/LegalPage'
 
 const COMPANY = ['company_name', 'company_address', 'company_reg_no', 'company_court', 'company_tax_no', 'company_bank', 'company_email', 'company_phone', 'company_authority', 'invoice_vat_rate', 'invoice_due_days', 'terms_version']
-const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'urgent_orders', 'idle_logout_minutes', 'production_lookahead_days', 'lot_expiry_warn_days', 'szamlazz_einvoice', 'szamlazz_send_email', 'packing_vacuum_fee', 'packing_portion_fee', 'packing_bag_text', ...COMPANY]
+const KEYS = ['order_cutoff_time', 'order_lead_days', 'order_weekdays', 'order_closed_dates', 'order_close_hu_holidays', 'order_close_bridge_days', 'order_bridge_days', 'urgent_orders', 'idle_logout_minutes', 'production_lookahead_days', 'lot_expiry_warn_days', 'szamlazz_einvoice', 'szamlazz_send_email', 'packing_vacuum_fee', 'packing_portion_fee', 'packing_bag_text', 'packing_portions_per_bag', 'packing_bag_kg', ...COMPANY]
 
 // Ordering rules (cutoff, lead time, delivery weekdays, closed dates) and the lot expiry warning
 export default function RuleSettings() {
@@ -124,6 +124,12 @@ export default function RuleSettings() {
             <input type="number" min="0" value={v.packing_portion_fee ?? ''} disabled={off} onChange={e => set('packing_portion_fee', e.target.value)} /></label>
           <label className="field"><span className="field-label">{t('packBagText')}</span>
             <input value={v.packing_bag_text ?? ''} disabled={off} onChange={e => set('packing_bag_text', e.target.value)} /></label>
+          <label className="field"><span className="field-label">{t('packPerBag')}</span>
+            <input type="number" min="1" value={v.packing_portions_per_bag ?? ''} disabled={off} onChange={e => set('packing_portions_per_bag', e.target.value)} />
+            <span className="field-hint">{t('packPerBagDefaultHint')}</span></label>
+          <label className="field"><span className="field-label">{t('packBagKg')}</span>
+            <input type="number" min="0.1" step="0.1" value={v.packing_bag_kg ?? ''} disabled={off} onChange={e => set('packing_bag_kg', e.target.value)} />
+            <span className="field-hint">{t('packPerBagDefaultHint')}</span></label>
         </div>
         <div className="panel-head"><h2>szamlazz.hu</h2></div>
         <p className="muted small pad-x">{t('szHint')}</p>
