@@ -17,14 +17,28 @@ export default function MonthlyReport() {
   const [month, setMonth] = useState(() => new Date().getDate() <= 5 ? lastMonth() : todayISO().slice(0, 7))
   const { data: r, error } = useData(() => q(db.rpc('monthly_report', { p_month: month + '-01' })), [month])
   const [invFor, setInvFor] = useState(null)
-  // Excel, printing and invoices only once the month is over (from its last day): before that the numbers still change
-  const closed = !!r && todayISO() >= r.to
+  // no month-end lock any more (Nov 2026): the report, Excel and invoices can be used any time
+  const closed = !!r
   // the invoice button only shows once szamlazz.hu is connected (SZAMLAZZ_AGENT_KEY set)
   const szOn = useData(() => szamlazz({ action: 'status' }).then(x => !!x?.configured).catch(() => false), [])
   // invoices already generated for this month (latest per customer / store)
   const inv = useData(() => q(db.from('invoices').select('id,number,kind,customer_id,location_id,issue_date,gross,file_path,cancelled_at,created_at')
     .eq('month', month + '-01').order('created_at', { ascending: false })), [month])
   const invKey = (c, l) => c + '|' + (l || '')
+  // manual "invoice done" marks (invoices are made by hand on szamlazz.hu)
+  const marks = useData(() => q(db.from('invoice_marks').select('*').eq('month', month + '-01')), [month])
+  const markOf = Object.fromEntries((marks.data || []).map(m => [invKey(m.customer_id, m.location_id), m]))
+  const [markBusy, setMarkBusy] = useState(null)
+  async function toggleMark(s) {
+    const key = invKey(s.customer_id, s.location_id), m = markOf[key]
+    setMarkBusy(key)
+    try {
+      if (m) await q(db.from('invoice_marks').delete().eq('id', m.id))
+      else await q(db.from('invoice_marks').insert({ customer_id: s.customer_id, location_id: s.location_id || null, month: month + '-01' }))
+      await marks.reload()
+    } catch (e) { alert(errText(e)) }
+    setMarkBusy(null)
+  }
   const latestInv = {}, invCount = {}, official = {}
   for (const x of inv.data || []) {
     const k = invKey(x.customer_id, x.location_id)
@@ -105,7 +119,6 @@ export default function MonthlyReport() {
       <ErrorBox error={error} />
       {!r ? !error && <Loading /> : (<>
         <p className="muted small">{r.from} – {r.to}</p>
-        {!closed && <p className="note-box">🔒 {t('rpLocked', { d: fmtDate(r.to, t.lang) })}</p>}
 
         <div className="kpi-grid">
           <Kpi label={t('rpDelivered')} value={`${fmtNum(k.soldQty, t.lang)} kg`} sub={t('rpOrdersN', { n: r.orders.delivered })} />
@@ -127,22 +140,28 @@ export default function MonthlyReport() {
           return <Section title={t('rpByStoreProduct')} head={[t('customer'), ...m.prods.map(p => p.name), t('total'), t('rpNetValue'), '']}
             rows={[...m.stores.map(s => [<>{s.name}{s.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>,
                 ...m.prods.map(p => kg(s.q[p.id], t)), <b>{kg(s.total, t)}</b>, s.value > 0 ? fmtFt(s.value) : '–',
-                s.customer_id ? (() => {
+                s.customer_id ? <>{(() => {
+                  const m = markOf[invKey(s.customer_id, s.location_id)]
+                  const busy = markBusy === invKey(s.customer_id, s.location_id)
+                  return m
+                    ? <span className="inv-done"><button className="btn btn-sm inv-mark-on" disabled={busy} title={t('invUnmark')} onClick={() => toggleMark(s)}>✓ {t('invMarked')}</button>
+                        <span className="muted small"> {fmtDate(m.done_at.slice(0, 10), t.lang)}{m.done_by_name ? ` · ${m.done_by_name}` : ''}</span></span>
+                    : <button className="btn btn-sm no-print" disabled={busy} onClick={() => toggleMark(s)}>☐ {t('invMark')}</button>
+                })()}{(() => {
                   const x = latestInv[invKey(s.customer_id, s.location_id)]
                   const o = official[invKey(s.customer_id, s.location_id)]
                   if (o) return <span className="inv-done no-print">
                     <button className="btn-link" title={t('szTitle')} onClick={() => o.file_path ? openInvoice(o).catch(e => alert(e.message)) : setInvFor(s)}>🧾 {o.number}</button>
                     <span className="muted small"> · {fmtDate(o.issue_date, t.lang)}</span>
                   </span>
-                  if (!x && !szOn.data) return ''
-                  if (!x) return closed ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
-                    : <span className="muted small no-print">🔒 {t('invAfterMonth')}</span>
-                  return <span className="inv-done no-print">
+                  if (!x && !o && !szOn.data) return null
+                  if (!x) return <> <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button></>
+                  return <span className="inv-done no-print"> 
                     <button className="btn-link" title={t('invOpen')} onClick={() => openInvoice(x).catch(e => alert(e.message))}>✓ {x.number}</button>
                     <span className="muted small"> · {fmtDate(x.issue_date, t.lang)}</span>
-                    {closed && <button className="btn-link small" onClick={() => setInvFor(s)}>{t('invRedo')}</button>}
+                    {szOn.data && <button className="btn-link small" onClick={() => setInvFor(s)}>{t('invRedo')}</button>}
                   </span>
-                })() : '']),
+                })()}</> : '']),
               [<b>{t('total')}</b>, ...m.prods.map(p => <b>{kg(m.totals[p.id], t)}</b>), <b>{kg(m.stores.reduce((a, s) => a + s.total, 0), t)}</b>,
                 <b>{fmtFt(m.stores.reduce((a, s) => a + s.value, 0))}</b>, '']]} />
         })()}
