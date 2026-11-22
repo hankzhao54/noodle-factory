@@ -19,6 +19,8 @@ export default function MonthlyReport() {
   const [invFor, setInvFor] = useState(null)
   // Excel, printing and invoices only once the month is over (from its last day): before that the numbers still change
   const closed = !!r && todayISO() >= r.to
+  // the invoice button only shows once szamlazz.hu is connected (SZAMLAZZ_AGENT_KEY set)
+  const szOn = useData(() => szamlazz({ action: 'status' }).then(x => !!x?.configured).catch(() => false), [])
   // invoices already generated for this month (latest per customer / store)
   const inv = useData(() => q(db.from('invoices').select('id,number,kind,customer_id,location_id,issue_date,gross,file_path,cancelled_at,created_at')
     .eq('month', month + '-01').order('created_at', { ascending: false })), [month])
@@ -132,6 +134,7 @@ export default function MonthlyReport() {
                     <button className="btn-link" title={t('szTitle')} onClick={() => o.file_path ? openInvoice(o).catch(e => alert(e.message)) : setInvFor(s)}>🧾 {o.number}</button>
                     <span className="muted small"> · {fmtDate(o.issue_date, t.lang)}</span>
                   </span>
+                  if (!x && !szOn.data) return ''
                   if (!x) return closed ? <button className="btn btn-sm no-print" onClick={() => setInvFor(s)}>🧾 {t('invoiceBtn')}</button>
                     : <span className="muted small no-print">🔒 {t('invAfterMonth')}</span>
                   return <span className="inv-done no-print">
