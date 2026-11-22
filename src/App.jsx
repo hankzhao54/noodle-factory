@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom'
-import { configured, db } from './lib/supabase'
+import { configured, db, q } from './lib/supabase'
+import { useData } from './lib/useData'
 import { AuthProvider, useAuth } from './lib/auth'
 import { LangContext, LANGS, useT } from './lib/i18n'
 import { ToastProvider, Loading } from './components/ui'
@@ -27,6 +28,7 @@ import PriceTiers from './pages/PriceTiers'
 import LegalPage from './legal/LegalPage'
 import Activity from './pages/Activity'
 import MonthlyReport from './pages/MonthlyReport'
+import Costs from './pages/Costs'
 
 
 export default function App() {
@@ -85,6 +87,8 @@ function StaffShell() {
   const t = useT()
   const { isAdmin, signOut, profile } = useAuth()
   const [open, setOpen] = useState(false)
+  // the Costs page is only for the people in noodle.cost_viewers (not every admin)
+  const costViewer = useData(() => q(db.rpc('is_cost_viewer')).catch(() => false), [profile?.user_id]).data === true
   const loc = useLocation()
   useEffect(() => setOpen(false), [loc.pathname])
 
@@ -94,7 +98,7 @@ function StaffShell() {
   ]
   const setup = [
     ['/products', 'nav_products'], ['/materials', 'nav_materials'], ['/suppliers', 'nav_suppliers'],
-    ['/customers', 'nav_customers'], ['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(isAdmin ? [['/monthly-report', 'nav_monthReport'], ['/users', 'nav_users'], ['/activity', 'nav_activity']] : []),
+    ['/customers', 'nav_customers'], ['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(costViewer ? [['/costs', 'nav_costs']] : []), ...(isAdmin ? [['/monthly-report', 'nav_monthReport'], ['/users', 'nav_users'], ['/activity', 'nav_activity']] : []),
   ]
   return (
     <div className={`shell ${open ? 'nav-open' : ''}`}>
@@ -142,6 +146,7 @@ function StaffShell() {
           {isAdmin && <Route path="/users" element={<Users />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           {isAdmin && <Route path="/monthly-report" element={<MonthlyReport />} />}
+          <Route path="/costs" element={<Costs />} />{/* the page itself checks cost_viewers */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>

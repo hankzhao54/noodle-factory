@@ -820,6 +820,7 @@ const D = {
   invMark: ['标记已开票', 'Mark invoiced', 'Számlázva'],
   invMarked: ['已开票', 'Invoiced', 'Számlázva'],
   invUnmark: ['再点一下取消标记', 'Click again to remove the mark', 'Kattints újra a jelölés törléséhez'],
+  nav_costs: ['成本分析 🔒', 'Costs 🔒', 'Költségek 🔒'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
