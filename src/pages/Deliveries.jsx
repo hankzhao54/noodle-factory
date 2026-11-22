@@ -86,7 +86,7 @@ export default function Deliveries() {
   // (earlier days' open orders first); a line is short when what is left does not cover it
   const left = Object.fromEntries(data.stock.map(s => [s.id, Number(s.on_hand)]))
   for (const o of data.earlier) for (const l of o.order_lines) left[l.product_id] = (left[l.product_id] ?? 0) - Number(l.qty)
-  const dayNeed = {}, lineShort = {}
+  const dayNeed = {}, lineShort = {}, openNeed = {}
   // orders already marked ready have their goods set aside: they take stock first and never show a shortage
   const openToday = data.orders.filter(o => OPEN.includes(o.status))
   const byReady = [...openToday.filter(o => o.status === 'ready' || o.packed_at), ...openToday.filter(o => !(o.status === 'ready' || o.packed_at))]
@@ -94,11 +94,12 @@ export default function Deliveries() {
     const have = left[l.product_id] ?? 0
     dayNeed[l.product_id] = (dayNeed[l.product_id] || 0) + Number(l.qty)
     const setAside = o.status === 'ready' || o.packed_at
+    if (!setAside) openNeed[l.product_id] = (openNeed[l.product_id] || 0) + Number(l.qty)
     if (have < Number(l.qty) && !setAside) lineShort[l.id] = { have: Math.max(0, have), missing: Number(l.qty) - Math.max(0, have) }
     left[l.product_id] = have - Number(l.qty)
   }
   const dayShort = Object.keys(dayNeed).filter(pid => (left[pid] ?? 0) < -0.0005)
-    .map(pid => ({ p: prod(pid), need: dayNeed[pid], missing: -left[pid] }))
+    .map(pid => ({ p: prod(pid), need: dayNeed[pid], missing: -left[pid], packedOnly: !openNeed[pid] }))
   // orders of the same customer / store on the same day share one delivery note
   const noteKey = o => `${o.customer_id}|${o.location_id || ''}|${o.delivery_date}`
   const sameStop = o => data.orders.filter(x => x.status !== 'cancelled' && noteKey(x) === noteKey(o))
@@ -139,8 +140,11 @@ export default function Deliveries() {
           {data.orders.some(isInternal) && <button className="btn btn-sm" onClick={() => printShipLabels(data.orders.filter(isInternal))}>{t('printInternalLabels')}</button>}
         </p>
       )}
-      {dayShort.length > 0 && (
-        <p className="note-box short-box">⚠ {t('dayShort')}: {dayShort.map(x => `${t.pick(x.p)} ${t('need')} ${fmtNum(x.need, t.lang)} · ${t('shortBy')} ${fmtNum(Math.round(x.missing * 10) / 10, t.lang)} ${x.p.unit || 'kg'}`).join(' ； ')}</p>
+      {dayShort.some(x => x.packedOnly) && (
+        <p className="note-box">ℹ {t('packedOverStock')}: {dayShort.filter(x => x.packedOnly).map(x => `${t.pick(x.p)} ${fmtNum(Math.round(x.missing * 10) / 10, t.lang)} ${x.p.unit || 'kg'}`).join(' ； ')}</p>
+      )}
+      {dayShort.some(x => !x.packedOnly) && (
+        <p className="note-box short-box">⚠ {t('dayShort')}: {dayShort.filter(x => !x.packedOnly).map(x => `${t.pick(x.p)} ${t('need')} ${fmtNum(x.need, t.lang)} · ${t('shortBy')} ${fmtNum(Math.round(x.missing * 10) / 10, t.lang)} ${x.p.unit || 'kg'}`).join(' ； ')}</p>
       )}
 
       {data.orders.length === 0 && data.runs.length === 0 ? (

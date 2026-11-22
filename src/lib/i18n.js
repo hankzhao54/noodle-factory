@@ -816,6 +816,7 @@ const D = {
   earlyMoved: ['#{no} 已改到这天送', '#{no} moved to this day', '#{no} áthelyezve erre a napra'],
   noteRemove: ['删除备注', 'Remove note', 'Megjegyzés törlése'],
   noteRemoved: ['备注已删除', 'Note removed', 'Megjegyzés törölve'],
+  packedOverStock: ['已备好的货比系统库存多，系统里可能少记了产量（请在生产页改实际产量或在库存页盘点）', 'Packed goods exceed the stock in the system – a batch yield may be recorded too low (fix the actual yield on Production or count the stock)', 'A bekészített áru több, mint a rendszerbeli készlet – lehet, hogy egy gyártás tényleges mennyisége alacsonyabban van rögzítve (javítsd a Gyártásnál vagy leltározz)'],
   printLabels: ['打印标签', 'Print labels', 'Címke nyomtatása'],
   printAfterFinish: ['完成后打印标签', 'Print labels after finishing', 'Lezárás után címkenyomtatás'],
   labelSize: ['标签尺寸', 'Label size', 'Címkeméret'],
