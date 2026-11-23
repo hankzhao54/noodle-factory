@@ -48,6 +48,10 @@ const L = {
   tax_per_person_month: ['雇主税 / 人 / 月', 'Employer tax / person / month', 'Járulék / fő / hó'], tax_people: ['交税人数', 'People (tax)', 'Fő (járulék)'],
   internal_price: ['内部价 Ft/kg', 'Internal price Ft/kg', 'Belső ár Ft/kg'], plan_kg_per_hour: ['计划效率 kg/工时', 'Planned kg per hour', 'Tervezett kg/óra'],
   work_days_month: ['每月工作天数', 'Working days / month', 'Munkanap / hó'],
+  min_production_shift_h: ['做面打卡至少几小时', 'Min. hours of a production shift', 'Gyártási műszak min. óra'],
+  otherWork: ['其他（打包 / 行政）', 'Other (packing / admin)', 'Egyéb (csomagolás / adminisztráció)'],
+  prodHours: ['做面工时', 'Production hours', 'Gyártási órák'],
+  shortNote: ['一次打卡不到 {h} 小时算其他工作（打包、行政），不算进效率；人工成本照样全部算', 'Timecards shorter than {h} h count as other work (packing, admin) and are left out of efficiency; labour cost still counts them', 'A {h} óránál rövidebb időkártyák egyéb munkának számítanak (csomagolás, adminisztráció), a hatékonyságba nem számítanak; a munkabérben benne vannak'],
   effTitle: ['每个人的效率', 'Efficiency per person', 'Hatékonyság személyenként'],
   effNote: ['「完成的产量」按谁点了「完成生产」算，不一定是谁做的；「单独上班的日子」只看那天只有他一个人打卡的日子，按那天全部产量 ÷ 他的工时算，更可靠', '“Batches finished” counts who pressed Finish, not necessarily who made them; “Days alone” uses only days when this person was the only one clocked in: that day’s output ÷ their hours, which is more reliable', 'A „befejezett” mennyiség azt számolja, ki nyomta meg a Befejezést, nem feltétlenül ki gyártotta; az „egyedül” csak azokat a napokat nézi, amikor csak ő dolgozott: a napi mennyiség ÷ az órái, ez megbízhatóbb'],
   finishedKg: ['完成的产量', 'Batches finished', 'Befejezett'], kgh: ['kg/工时', 'kg/h', 'kg/óra'],
@@ -57,7 +61,7 @@ const L = {
   saved: ['已保存', 'Saved', 'Mentve'],
 }
 const LANGS = ['zh', 'en', 'hu']
-const SETTING_KEYS = ['rent_month', 'utilities_month', 'tax_per_person_month', 'tax_people', 'internal_price', 'plan_kg_per_hour', 'work_days_month']
+const SETTING_KEYS = ['rent_month', 'utilities_month', 'tax_per_person_month', 'tax_people', 'internal_price', 'plan_kg_per_hour', 'work_days_month', 'min_production_shift_h']
 
 const n = v => Number(v) || 0
 const dayDiff = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5)
@@ -175,7 +179,7 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
       rows={people.map(p => [p.person, p.days.size, fmtNum(Math.round(p.hours * 100) / 100, t.lang), p.wage != null ? fmtFt(p.wage) : '–', fmtFt(p.amount)])}
       foot={people.length > 1 ? [tr('total'), '', fmtNum(Math.round(hours * 100) / 100, t.lang), '', fmtFt(labourFt)] : null} />
 
-    <Efficiency tr={tr} t={t} rows={rows} batches={r.batches || []} />
+    <Efficiency tr={tr} t={t} rows={rows} batches={r.batches || []} minH={s.min_production_shift_h ?? 2} />
 
     <Revenue tr={tr} t={t} rows={[
       [tr('internal'), intKg, intRev], [tr('external'), extKg, extRev],
@@ -203,12 +207,14 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
 const firstName = x => String(x || '').trim().split(/\s+/)[0].toLowerCase()
 const r1 = v => Math.round(v * 10) / 10
 
-function Efficiency({ tr, t, rows, batches }) {
+function Efficiency({ tr, t, rows, batches, minH }) {
   // hours per person per day (101base) and kg per day / per "finished by" (noodle)
-  const hrs = {}, names = {}
+  // a timecard shorter than minH hours is other work (packing, admin): not production time
+  const hrs = {}, names = {}, other = {}
   for (const x of rows) {
     const k = firstName(x.person); names[k] = x.person
     if (!(Number(x.hours) > 0)) continue // open or zero-length timecards
+    if (Number(x.hours) < Number(minH)) { ((other[x.day] ||= {})[k] = ((other[x.day] || {})[k] || 0) + Number(x.hours)); continue }
     ;((hrs[x.day] ||= {})[k] = ((hrs[x.day] || {})[k] || 0) + Number(x.hours || 0))
   }
   const dayKg = {}, byKg = {}
@@ -219,25 +225,27 @@ function Efficiency({ tr, t, rows, batches }) {
   }
   const people = Object.keys(names).map(k => {
     let hours = 0, aloneH = 0, aloneKg = 0, aloneN = 0
+    const otherH = Object.values(other).reduce((a, m) => a + (m[k] || 0), 0)
     for (const [d, m] of Object.entries(hrs)) {
       if (!m[k]) continue
       hours += m[k]
       if (Object.keys(m).length === 1 && dayKg[d]) { aloneH += m[k]; aloneKg += dayKg[d]; aloneN++ }
     }
-    return { k, name: names[k], hours, kg: byKg[k] || 0, aloneH, aloneKg, aloneN }
+    return { k, name: names[k], hours, otherH, kg: byKg[k] || 0, aloneH, aloneKg, aloneN }
   }).sort((a, b) => b.hours - a.hours)
-  const days = [...new Set([...Object.keys(hrs), ...Object.keys(dayKg)])].sort().reverse()
+  const days = [...new Set([...Object.keys(hrs), ...Object.keys(dayKg), ...Object.keys(other)])].sort().reverse()
   const f = v => fmtNum(r1(v), t.lang)
   return (<>
-    <Table title={tr('effTitle')} note={tr('effNote')}
-      head={[tr('person'), tr('hours'), tr('finishedKg'), tr('kgh'), tr('aloneDays'), tr('kgh')]}
-      rows={people.map(p => [p.name, f(p.hours), `${f(p.kg)} kg`, p.hours ? f(p.kg / p.hours) : '–',
+    <Table title={tr('effTitle')} note={`${tr('shortNote', { h: fmtNum(Number(minH), t.lang) })}. ${tr('effNote')}`}
+      head={[tr('person'), tr('prodHours'), tr('otherWork'), tr('finishedKg'), tr('kgh'), tr('aloneDays'), tr('kgh')]}
+      rows={people.map(p => [p.name, f(p.hours), p.otherH ? `${f(p.otherH)} h` : '–', `${f(p.kg)} kg`, p.hours ? f(p.kg / p.hours) : '–',
         p.aloneN ? `${p.aloneN} · ${f(p.aloneKg)} kg / ${f(p.aloneH)} h` : '–', p.aloneH ? <b>{f(p.aloneKg / p.aloneH)}</b> : '–'])} />
     <Table title={tr('dayTitle')} note={tr('dayNote')}
       head={[tr('date'), tr('who'), tr('output'), tr('kgh')]}
       rows={days.map(d => {
         const m = hrs[d] || {}, h = Object.values(m).reduce((a, x) => a + x, 0)
-        return [d, Object.entries(m).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ') || '–',
+        const o = Object.entries(other[d] || {}).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ')
+        return [d, (Object.entries(m).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ') || '–') + (o ? ` (${tr('otherWork')}: ${o})` : ''),
           dayKg[d] ? `${f(dayKg[d])} kg` : '–', h && dayKg[d] ? f(dayKg[d] / h) : '–']
       })} />
   </>)
