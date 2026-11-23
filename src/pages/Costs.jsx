@@ -34,6 +34,7 @@ const L = {
   noPrice: ['没单价', 'no price', 'nincs ár'],
   revenue: ['收入和毛利', 'Revenue and margin', 'Bevétel és árrés'], kg: ['kg', 'kg', 'kg'],
   internal: ['自家餐厅（按内部价）', 'Own restaurants (internal price)', 'Saját éttermek (belső áron)'],
+  samples: ['样品（免费，0 Ft）', 'Samples (free, 0 Ft)', 'Minta (ingyenes, 0 Ft)'],
   external: ['外部客户（实际售价）', 'External customers (actual prices)', 'Külső vevők (tényleges ár)'],
   revTotal: ['收入合计', 'Revenue', 'Bevétel'], costTotal: ['成本合计', 'Cost', 'Költség'], profit: ['毛利', 'Margin', 'Árrés'],
   revNote: ['按送货日在这段时间内、已送达的订单算；产量和成本按生产完成时间算，两者可能对不齐', 'Delivered orders by delivery date; output and cost by production date, so the two can differ', 'Kiszállított rendelések a szállítási nap szerint; a gyártás és a költség a gyártás napja szerint, ezért eltérhetnek'],
@@ -135,7 +136,8 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
   const perKg = v => kg > 0 ? fmtFt(v / kg) : '–'
 
   const inter = r.deliveries.find(x => x.type === 'internal') || {}
-  const ext = r.deliveries.filter(x => x.type !== 'internal')
+  const ext = r.deliveries.filter(x => x.type !== 'internal' && x.type !== 'sample')
+  const smpKg = n((r.deliveries.find(x => x.type === 'sample') || {}).kg)
   const intKg = n(inter.kg), intRev = intKg * n(s.internal_price)
   const extKg = ext.reduce((a, x) => a + n(x.kg), 0), extRev = ext.reduce((a, x) => a + n(x.value), 0)
   const revenue = intRev + extRev
@@ -148,7 +150,7 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
       <Kpi label={tr('hours')} value={labLoading ? '…' : `${fmtNum(Math.round(hours * 10) / 10, t.lang)} h`} />
       <Kpi label={tr('kgPerHour')} value={kgh == null ? '–' : fmtNum(Math.round(kgh * 10) / 10, t.lang)} />
       <Kpi label={tr('costPerKg')} value={perKg(totalFt)} />
-      <Kpi label={tr('margin')} value={fmtFt(revenue - totalFt)} sub={kg > 0 ? `${tr('perKg')} ${fmtFt((revenue - totalFt) / Math.max(intKg + extKg, 1))}` : ''} />
+      <Kpi label={tr('margin')} value={fmtFt(revenue - totalFt)} sub={kg > 0 ? `${tr('perKg')} ${fmtFt((revenue - totalFt) / Math.max(intKg + extKg + smpKg, 1))}` : ''} />
     </div>
 
     <Table title={tr('costTitle')} note={tr('proRata', { d: days })}
@@ -169,6 +171,7 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
 
     <Revenue tr={tr} t={t} rows={[
       [tr('internal'), intKg, intRev], [tr('external'), extKg, extRev],
+      ...(smpKg ? [[tr('samples'), smpKg, 0]] : []),
     ]} revenue={revenue} cost={totalFt} note={tr('revNote')} />
 
     <Table title={tr('production')} note={r.production.some(x => n(x.unweighed)) ? tr('unweighedNote') : ''}
