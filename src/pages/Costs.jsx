@@ -12,6 +12,7 @@ import { Loading, ErrorBox, PageHead, BlurNum, errText } from '../components/ui'
 const L = {
   title: ['成本分析', 'Costs', 'Költségek'],
   onlyYou: ['只有成本查看人能看到这一页', 'Only cost viewers can see this page', 'Ezt az oldalt csak a költség-betekintők látják'],
+  today: ['今天', 'Today', 'Ma'], yesterday: ['昨天', 'Yesterday', 'Tegnap'],
   thisMonth: ['本月', 'This month', 'Ez a hónap'], lastMonth: ['上月', 'Last month', 'Előző hónap'],
   last7: ['最近 7 天', 'Last 7 days', 'Utolsó 7 nap'], last30: ['最近 30 天', 'Last 30 days', 'Utolsó 30 nap'],
   from: ['从', 'From', 'Ettől'], to: ['到', 'To', 'Eddig'],
@@ -96,6 +97,8 @@ export default function Costs() {
 
   const [lmFrom, lmTo] = lastMonthRange()
   const presets = [
+    [tr('today'), todayISO(), todayISO()],
+    [tr('yesterday'), todayISO(-1), todayISO(-1)],
     [tr('thisMonth'), monthStart(), todayISO()],
     [tr('lastMonth'), lmFrom, lmTo],
     [tr('last7'), todayISO(-6), todayISO()],
