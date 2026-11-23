@@ -48,6 +48,12 @@ const L = {
   tax_per_person_month: ['雇主税 / 人 / 月', 'Employer tax / person / month', 'Járulék / fő / hó'], tax_people: ['交税人数', 'People (tax)', 'Fő (járulék)'],
   internal_price: ['内部价 Ft/kg', 'Internal price Ft/kg', 'Belső ár Ft/kg'], plan_kg_per_hour: ['计划效率 kg/工时', 'Planned kg per hour', 'Tervezett kg/óra'],
   work_days_month: ['每月工作天数', 'Working days / month', 'Munkanap / hó'],
+  effTitle: ['每个人的效率', 'Efficiency per person', 'Hatékonyság személyenként'],
+  effNote: ['「完成的产量」按谁点了「完成生产」算，不一定是谁做的；「单独上班的日子」只看那天只有他一个人打卡的日子，按那天全部产量 ÷ 他的工时算，更可靠', '“Batches finished” counts who pressed Finish, not necessarily who made them; “Days alone” uses only days when this person was the only one clocked in: that day’s output ÷ their hours, which is more reliable', 'A „befejezett” mennyiség azt számolja, ki nyomta meg a Befejezést, nem feltétlenül ki gyártotta; az „egyedül” csak azokat a napokat nézi, amikor csak ő dolgozott: a napi mennyiség ÷ az órái, ez megbízhatóbb'],
+  finishedKg: ['完成的产量', 'Batches finished', 'Befejezett'], kgh: ['kg/工时', 'kg/h', 'kg/óra'],
+  aloneDays: ['单独上班的日子', 'Days alone', 'Egyedül'],
+  dayTitle: ['每天效率', 'Efficiency per day', 'Hatékonyság naponta'], date: ['日期', 'Date', 'Nap'], who: ['谁上班', 'Who worked', 'Ki dolgozott'],
+  dayNote: ['产量按完成生产的时间算到当天；没打卡但有产量、或有打卡没产量的日子也列出来', 'Output counts on the day the batch was finished; days with output but no timecards, or hours but no output, are listed too', 'A mennyiség a gyártás befejezésének napjára számít; a csak órás vagy csak gyártásos napok is szerepelnek'],
   saved: ['已保存', 'Saved', 'Mentve'],
 }
 const LANGS = ['zh', 'en', 'hu']
@@ -169,6 +175,8 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
       rows={people.map(p => [p.person, p.days.size, fmtNum(Math.round(p.hours * 100) / 100, t.lang), p.wage != null ? fmtFt(p.wage) : '–', fmtFt(p.amount)])}
       foot={people.length > 1 ? [tr('total'), '', fmtNum(Math.round(hours * 100) / 100, t.lang), '', fmtFt(labourFt)] : null} />
 
+    <Efficiency tr={tr} t={t} rows={rows} batches={r.batches || []} />
+
     <Revenue tr={tr} t={t} rows={[
       [tr('internal'), intKg, intRev], [tr('external'), extKg, extRev],
       ...(smpKg ? [[tr('samples'), smpKg, 0]] : []),
@@ -189,6 +197,49 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
 
     <Scenario tr={tr} t={t} s={s} avgWage={avgWage} matKg={kg > 0 ? matFt / kg : 186} />
     <Settings tr={tr} s={s} reload={reload} />
+  </>)
+}
+
+const firstName = x => String(x || '').trim().split(/\s+/)[0].toLowerCase()
+const r1 = v => Math.round(v * 10) / 10
+
+function Efficiency({ tr, t, rows, batches }) {
+  // hours per person per day (101base) and kg per day / per "finished by" (noodle)
+  const hrs = {}, names = {}
+  for (const x of rows) {
+    const k = firstName(x.person); names[k] = x.person
+    if (!(Number(x.hours) > 0)) continue // open or zero-length timecards
+    ;((hrs[x.day] ||= {})[k] = ((hrs[x.day] || {})[k] || 0) + Number(x.hours || 0))
+  }
+  const dayKg = {}, byKg = {}
+  for (const b of batches) {
+    dayKg[b.day] = (dayKg[b.day] || 0) + Number(b.kg || 0)
+    const k = firstName(b.by); byKg[k] = (byKg[k] || 0) + Number(b.kg || 0)
+    if (k && !names[k]) names[k] = b.by
+  }
+  const people = Object.keys(names).map(k => {
+    let hours = 0, aloneH = 0, aloneKg = 0, aloneN = 0
+    for (const [d, m] of Object.entries(hrs)) {
+      if (!m[k]) continue
+      hours += m[k]
+      if (Object.keys(m).length === 1 && dayKg[d]) { aloneH += m[k]; aloneKg += dayKg[d]; aloneN++ }
+    }
+    return { k, name: names[k], hours, kg: byKg[k] || 0, aloneH, aloneKg, aloneN }
+  }).sort((a, b) => b.hours - a.hours)
+  const days = [...new Set([...Object.keys(hrs), ...Object.keys(dayKg)])].sort().reverse()
+  const f = v => fmtNum(r1(v), t.lang)
+  return (<>
+    <Table title={tr('effTitle')} note={tr('effNote')}
+      head={[tr('person'), tr('hours'), tr('finishedKg'), tr('kgh'), tr('aloneDays'), tr('kgh')]}
+      rows={people.map(p => [p.name, f(p.hours), `${f(p.kg)} kg`, p.hours ? f(p.kg / p.hours) : '–',
+        p.aloneN ? `${p.aloneN} · ${f(p.aloneKg)} kg / ${f(p.aloneH)} h` : '–', p.aloneH ? <b>{f(p.aloneKg / p.aloneH)}</b> : '–'])} />
+    <Table title={tr('dayTitle')} note={tr('dayNote')}
+      head={[tr('date'), tr('who'), tr('output'), tr('kgh')]}
+      rows={days.map(d => {
+        const m = hrs[d] || {}, h = Object.values(m).reduce((a, x) => a + x, 0)
+        return [d, Object.entries(m).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ') || '–',
+          dayKg[d] ? `${f(dayKg[d])} kg` : '–', h && dayKg[d] ? f(dayKg[d] / h) : '–']
+      })} />
   </>)
 }
 
