@@ -57,6 +57,8 @@ const L = {
   effNote: ['每天的产量算在那天做面工时最多的人头上（只有一个人上班就是他），用当天产量 ÷ 他自己的做面工时', 'Each day\'s output counts for whoever had the most production hours that day (or the only one there): that day\'s output ÷ their own production hours', 'A napi mennyiség annak számít, akinek aznap a legtöbb gyártási órája volt (vagy aki egyedül dolgozott): napi mennyiség ÷ a saját gyártási órái'],
   kgh: ['kg/工时', 'kg/h', 'kg/óra'],
   madeDays: ['做面的日子', 'Days making noodles', 'Gyártási napok'], maker: ['做面的人', 'Made by', 'Gyártotta'],
+  notProd: ['不算做面', 'Not production', 'Nem gyártás'], packDay: ['打包 / 行政日', 'Packing / admin day', 'Csomagolási / admin nap'],
+  flagNote: ['标记成「打包 / 行政日」的那天，工时全部算其他工作；点一下切换', 'On a day marked “packing / admin” all hours count as other work; click to toggle', 'A „csomagolási / admin” napon minden óra egyéb munkának számít; kattints a váltáshoz'],
   dayTitle: ['每天效率', 'Efficiency per day', 'Hatékonyság naponta'], date: ['日期', 'Date', 'Nap'], who: ['谁上班', 'Who worked', 'Ki dolgozott'],
   dayNote: ['产量按完成生产的时间算到当天；没打卡但有产量、或有打卡没产量的日子也列出来', 'Output counts on the day the batch was finished; days with output but no timecards, or hours but no output, are listed too', 'A mennyiség a gyártás befejezésének napjára számít; a csak órás vagy csak gyártásos napok is szerepelnek'],
   saved: ['已保存', 'Saved', 'Mentve'],
@@ -94,6 +96,7 @@ export default function Costs() {
   const [to, setTo] = useState(todayISO())
   const rep = useData(() => q(db.rpc('cost_report', { p_from: from, p_to: to })), [from, to])
   const lab = useData(() => labour(from, to), [from, to])
+  const flags = useData(() => q(db.from('cost_day_flags').select('day').gte('day', from).lte('day', to)), [from, to])
 
   const [lmFrom, lmTo] = lastMonthRange()
   const presets = [
@@ -117,12 +120,12 @@ export default function Costs() {
       ))}</div>
       <ErrorBox error={rep.error} />
       {lab.error && <p className="note-box short-box">⚠ {tr('laborErr')}{lab.error.message}</p>}
-      {!r ? !rep.error && <Loading /> : <Body r={r} rows={lab.data || []} labLoading={lab.loading} tr={tr} t={t} reload={rep.reload} />}
+      {!r ? !rep.error && <Loading /> : <Body r={r} rows={lab.data || []} labLoading={lab.loading} tr={tr} t={t} reload={rep.reload} flags={flags} />}
     </div>
   )
 }
 
-function Body({ r, rows, labLoading, tr, t, reload }) {
+function Body({ r, rows, labLoading, tr, t, reload, flags }) {
   const s = r.settings || {}
   const days = dayDiff(r.from, r.to) + 1
   const share = days / 30
@@ -182,7 +185,7 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
       rows={people.map(p => [p.person, p.days.size, fmtNum(Math.round(p.hours * 100) / 100, t.lang), p.wage != null ? fmtFt(p.wage) : '–', fmtFt(p.amount)])}
       foot={people.length > 1 ? [tr('total'), '', fmtNum(Math.round(hours * 100) / 100, t.lang), '', fmtFt(labourFt)] : null} />
 
-    <Efficiency tr={tr} t={t} rows={rows} batches={r.batches || []} minH={s.min_production_shift_h ?? 2} />
+    <Efficiency tr={tr} t={t} rows={rows} batches={r.batches || []} minH={s.min_production_shift_h ?? 2} flags={flags} />
 
     <Revenue tr={tr} t={t} rows={[
       [tr('internal'), intKg, intRev], [tr('external'), extKg, extRev],
@@ -210,14 +213,25 @@ function Body({ r, rows, labLoading, tr, t, reload }) {
 const firstName = x => String(x || '').trim().split(/\s+/)[0].toLowerCase()
 const r1 = v => Math.round(v * 10) / 10
 
-function Efficiency({ tr, t, rows, batches, minH }) {
+function Efficiency({ tr, t, rows, batches, minH, flags }) {
+  const flagged = new Set((flags.data || []).map(x => x.day))
+  const [busy, setBusy] = useState(null)
+  async function toggle(day) {
+    setBusy(day)
+    try {
+      if (flagged.has(day)) await q(db.from('cost_day_flags').delete().eq('day', day))
+      else await q(db.from('cost_day_flags').insert({ day }))
+      await flags.reload()
+    } catch (e) { alert(errText(e)) }
+    setBusy(null)
+  }
   // production hours per person per day (101base) and kg per day (noodle)
   // a timecard shorter than minH hours is other work (packing, admin): not production time
   const hrs = {}, names = {}, other = {}
   for (const x of rows) {
     const k = firstName(x.person); names[k] = x.person
     if (!(Number(x.hours) > 0)) continue // open or zero-length timecards
-    if (Number(x.hours) < Number(minH)) { ((other[x.day] ||= {})[k] = ((other[x.day] || {})[k] || 0) + Number(x.hours)); continue }
+    if (Number(x.hours) < Number(minH) || flagged.has(x.day)) { ((other[x.day] ||= {})[k] = ((other[x.day] || {})[k] || 0) + Number(x.hours)); continue }
     ;((hrs[x.day] ||= {})[k] = ((hrs[x.day] || {})[k] || 0) + Number(x.hours || 0))
   }
   const dayKg = {}
@@ -241,15 +255,17 @@ function Efficiency({ tr, t, rows, batches, minH }) {
       head={[tr('person'), tr('prodHours'), tr('otherWork'), tr('madeDays'), tr('kgh')]}
       rows={people.map(p => [p.name, f(p.hours), p.otherH ? `${f(p.otherH)} h` : '–',
         p.madeN ? `${p.madeN} · ${f(p.madeKg)} kg / ${f(p.madeH)} h` : '–', p.madeH ? <b>{f(p.madeKg / p.madeH)}</b> : '–'])} />
-    <Table title={tr('dayTitle')} note={tr('dayNote')}
-      head={[tr('date'), tr('who'), tr('output'), tr('maker'), tr('kgh')]}
+    <Table title={tr('dayTitle')} note={`${tr('dayNote')}. ${tr('flagNote')}`}
+      head={[tr('date'), tr('who'), tr('output'), tr('maker'), tr('kgh'), '']}
       rows={days.map(d => {
         const m = hrs[d] || {}, h = Object.values(m).reduce((a, x) => a + x, 0)
         const o = Object.entries(other[d] || {}).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ')
         return [d, (Object.entries(m).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ') || '–') + (o ? ` (${tr('otherWork')}: ${o})` : ''),
           dayKg[d] ? `${f(dayKg[d])} kg` : '–',
           dayKg[d] && makerOf(d) ? names[makerOf(d)]?.split(' ')[0] : '–',
-          dayKg[d] && makerOf(d) ? f(dayKg[d] / hrs[d][makerOf(d)]) : '–']
+          dayKg[d] && makerOf(d) ? f(dayKg[d] / hrs[d][makerOf(d)]) : '–',
+          <button key="f" type="button" className={flagged.has(d) ? 'btn btn-sm inv-mark-on' : 'btn-link small'} disabled={busy === d} onClick={() => toggle(d)}>
+            {flagged.has(d) ? `📦 ${tr('packDay')} ✕` : tr('notProd')}</button>]
       })} />
   </>)
 }
