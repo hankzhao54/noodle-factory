@@ -134,6 +134,8 @@ export default function MonthlyReport() {
           rows={r.sales_by_product.map(x => [x.name, kg(x.internal_qty, t), kg(x.external_qty, t), <b>{kg(x.qty, t)}</b>, fmtFt(num(x.value))])} />
         <Section title={t('rpSalesByCustomer')} head={[t('customer'), t('rpOrders'), t('qty'), t('rpNetValue')]}
           rows={r.sales_by_customer.map(x => [<>{x.name}{x.type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}</>, x.orders, kg(x.qty, t), fmtFt(num(x.value))])} />
+        {r.samples?.length > 0 && <Section title={`🎁 ${t('rpSamples')}`} head={[t('customer'), t('name'), t('qty'), t('rpOrders')]}
+          rows={r.samples.map(x => [x.customer, x.product, kg(x.qty, t), x.orders])} />}
         {(() => {
           const m = storeMatrix(r.sales_by_store_product)
           if (!m.stores.length) return null
@@ -234,7 +236,7 @@ function InvoiceDialog({ store, month, from, to, onClose, history = [], official
       q(db.from('customers').select('id,name,address,vat_no,email,phone').eq('id', store.customer_id).single()),
       store.location_id ? q(db.from('customer_locations').select('id,name,address').eq('id', store.location_id).single()) : null,
       (() => {
-        let qq = db.from('orders').select('id,no,delivery_date,order_lines(qty,delivered_qty,unit_price,pack_vacuum,portion_g,vacuum_fee,portion_fee,product:products(name_hu,unit,sort))')
+        let qq = db.from('orders').select('id,no,delivery_date,order_lines(qty,delivered_qty,unit_price,pack_vacuum,portion_g,vacuum_fee,portion_fee,product:products(name_hu,unit,sort))').eq('is_sample', false)
           .eq('customer_id', store.customer_id).eq('status', 'delivered').gte('delivery_date', from).lte('delivery_date', to).order('delivery_date')
         qq = store.location_id ? qq.eq('location_id', store.location_id) : qq.is('location_id', null)
         return q(qq)

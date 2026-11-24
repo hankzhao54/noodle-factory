@@ -61,6 +61,7 @@ export default function Orders() {
               <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
               <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
                 {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
+                {o.is_sample && <span className="tag tag-sample">🎁 {t('sampleTag')}</span>}
                 {data.requests.some(r => r.order_id === o.id) && <span className="tag tag-low">✋ {t('changeRequestTag')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>
               <td className="muted small">{data.names[o.created_by] || '–'}</td>
@@ -133,6 +134,10 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
     try { await q(db.rpc('set_order_packed', { p_order: order.id, p_packed: true })); toast(t('o_ready')); onDone() }
     catch (e) { toast(errText(e), 'error') }
   }
+  const toggleSample = async () => {
+    try { await q(db.rpc('set_order_sample', { p_order: order.id, p_sample: !order.is_sample })); toast(order.is_sample ? t('sampleOff') : t('sampleOn')); onDone() }
+    catch (e) { toast(errText(e), 'error') }
+  }
   const setStatus = async status => {
     try {
       await q(db.from('orders').update({ status }).eq('id', order.id))
@@ -144,6 +149,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
       <div className="detail-meta">
         <Status value={order.status} prefix="o" />
         {order.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
+        {order.is_sample && <span className="tag tag-sample">🎁 {t('sampleTag')}</span>}
         <span>{t('deliveryDate')}: <b>{fmtDate(order.delivery_date, t.lang)}</b></span>
         {orderedBy && <span className="muted">{t('orderedBy')}: {orderedBy}</span>}
         {order.packed_at && <span className="tag tag-packed">✓ {t('o_ready')} · {new Date(order.packed_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{order.packed_by_name ? ` · ${order.packed_by_name}` : ''}</span>}
@@ -218,6 +224,7 @@ export function OrderDetail({ order, customer, products, onClose, onDone, readOn
             (askCancel
               ? <button className="btn btn-danger" onClick={() => setStatus('cancelled')}>{t('cancelOrderConfirm')}</button>
               : <button className="btn btn-danger-quiet" onClick={() => setAskCancel(true)}>{t('cancelOrder')}</button>)}
+          {order.status !== 'cancelled' && <button className="btn btn-quiet" title={t('sampleHint')} onClick={toggleSample}>{order.is_sample ? t('sampleUnmark') : `🎁 ${t('sampleMark')}`}</button>}
           <span className="grow" />
           {order.status === 'submitted' && <button className="btn btn-primary" onClick={() => setStatus('confirmed')}>{t('confirm')}</button>}
           {order.status === 'confirmed' && <button className="btn btn-primary" onClick={markReady}>{t('markReady')}</button>}

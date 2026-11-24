@@ -446,6 +446,8 @@ textarea { resize: vertical; }
 .chip-urgent.on { background: var(--short); color: #fff; }
 .urgent-note { color: var(--short); margin: 0; }
 .tag-urgent { background: var(--short); color: #fff; }
+.tag-sample { background: #efedff; color: #4b3fa8; }
+.dnote-sample { font-weight: 700; letter-spacing: .04em; border: 1.5px solid #000; display: inline-block; padding: 1mm 2.5mm; margin-top: 1.5mm; }
 
 /* portal: own restaurants confirm receipt */
 .to-receive { margin: 0 0 16px; padding: 12px 14px; border: 1.5px solid var(--kansui); border-radius: var(--r-md, 10px); background: var(--kansui-soft); display: flex; flex-direction: column; gap: 10px; }

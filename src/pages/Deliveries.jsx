@@ -112,6 +112,7 @@ export default function Deliveries() {
       notes: [...new Set(g.map(o => o.notes).filter(Boolean))].join(' · ') || null,
       received_by: g.map(o => o.received_by).find(Boolean) || null,
       status: g.every(o => o.status === 'delivered') ? 'delivered' : g[0].status,
+      _sampleNos: g.filter(o => o.is_sample).map(o => o.no),
     })
   }
   const ctx = { data, cust, shipTo, prod, reload, setModal, lineShort, sameStop, printLabels: printShipLabels, print: list => {
@@ -237,6 +238,7 @@ function StopCard({ order: o, ctx, runs, onAssign }) {
         <h3>{c.name}</h3>
         <span className={`tag tag-${c.type}`}>{t(c.type)}</span>
         {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
+        {o.is_sample && <span className="tag tag-sample">🎁 {t('sampleTag')}</span>}
         <span className="grow" />
         <Status value={o.status} prefix="o" />
       </header>
@@ -814,6 +816,7 @@ function DeliveryNote({ order: o, customer: c, prod, run, pinfo, info }) {
           <h1>{t('deliveryNote')}</h1>
           <p className="dnote-no">{o._nos ? o._nos.map(n => '#' + n).join(' + ') : `#${o.no}`}</p>
           <p>{huDate(o.delivery_date)}</p>
+          {(o._nos ? o._sampleNos?.length > 0 : o.is_sample) && <p className="dnote-sample">INGYENES MINTA{o._nos ? ` (${o._sampleNos.map(n => '#' + n).join(', ')})` : ''}</p>}
           {run && <p className="dnote-run">D{run.no}{run.driver ? ` · ${run.driver}` : ''}{run.vehicle ? ` · ${run.vehicle}` : ''}</p>}
         </div>
       </header>
