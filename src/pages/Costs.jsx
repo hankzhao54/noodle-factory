@@ -54,9 +54,9 @@ const L = {
   prodHours: ['做面工时', 'Production hours', 'Gyártási órák'],
   shortNote: ['一次打卡不到 {h} 小时算其他工作（打包、行政），不算进效率；人工成本照样全部算', 'Timecards shorter than {h} h count as other work (packing, admin) and are left out of efficiency; labour cost still counts them', 'A {h} óránál rövidebb időkártyák egyéb munkának számítanak (csomagolás, adminisztráció), a hatékonyságba nem számítanak; a munkabérben benne vannak'],
   effTitle: ['每个人的效率', 'Efficiency per person', 'Hatékonyság személyenként'],
-  effNote: ['「完成的产量」按谁点了「完成生产」算，不一定是谁做的；「单独上班的日子」只看那天只有他一个人打卡的日子，按那天全部产量 ÷ 他的工时算，更可靠', '“Batches finished” counts who pressed Finish, not necessarily who made them; “Days alone” uses only days when this person was the only one clocked in: that day’s output ÷ their hours, which is more reliable', 'A „befejezett” mennyiség azt számolja, ki nyomta meg a Befejezést, nem feltétlenül ki gyártotta; az „egyedül” csak azokat a napokat nézi, amikor csak ő dolgozott: a napi mennyiség ÷ az órái, ez megbízhatóbb'],
-  finishedKg: ['完成的产量', 'Batches finished', 'Befejezett'], kgh: ['kg/工时', 'kg/h', 'kg/óra'],
-  aloneDays: ['单独上班的日子', 'Days alone', 'Egyedül'],
+  effNote: ['每天的产量算在那天做面工时最多的人头上（只有一个人上班就是他），用当天产量 ÷ 他自己的做面工时', 'Each day\'s output counts for whoever had the most production hours that day (or the only one there): that day\'s output ÷ their own production hours', 'A napi mennyiség annak számít, akinek aznap a legtöbb gyártási órája volt (vagy aki egyedül dolgozott): napi mennyiség ÷ a saját gyártási órái'],
+  kgh: ['kg/工时', 'kg/h', 'kg/óra'],
+  madeDays: ['做面的日子', 'Days making noodles', 'Gyártási napok'], maker: ['做面的人', 'Made by', 'Gyártotta'],
   dayTitle: ['每天效率', 'Efficiency per day', 'Hatékonyság naponta'], date: ['日期', 'Date', 'Nap'], who: ['谁上班', 'Who worked', 'Ki dolgozott'],
   dayNote: ['产量按完成生产的时间算到当天；没打卡但有产量、或有打卡没产量的日子也列出来', 'Output counts on the day the batch was finished; days with output but no timecards, or hours but no output, are listed too', 'A mennyiség a gyártás befejezésének napjára számít; a csak órás vagy csak gyártásos napok is szerepelnek'],
   saved: ['已保存', 'Saved', 'Mentve'],
@@ -211,7 +211,7 @@ const firstName = x => String(x || '').trim().split(/\s+/)[0].toLowerCase()
 const r1 = v => Math.round(v * 10) / 10
 
 function Efficiency({ tr, t, rows, batches, minH }) {
-  // hours per person per day (101base) and kg per day / per "finished by" (noodle)
+  // production hours per person per day (101base) and kg per day (noodle)
   // a timecard shorter than minH hours is other work (packing, admin): not production time
   const hrs = {}, names = {}, other = {}
   for (const x of rows) {
@@ -220,36 +220,36 @@ function Efficiency({ tr, t, rows, batches, minH }) {
     if (Number(x.hours) < Number(minH)) { ((other[x.day] ||= {})[k] = ((other[x.day] || {})[k] || 0) + Number(x.hours)); continue }
     ;((hrs[x.day] ||= {})[k] = ((hrs[x.day] || {})[k] || 0) + Number(x.hours || 0))
   }
-  const dayKg = {}, byKg = {}
-  for (const b of batches) {
-    dayKg[b.day] = (dayKg[b.day] || 0) + Number(b.kg || 0)
-    const k = firstName(b.by); byKg[k] = (byKg[k] || 0) + Number(b.kg || 0)
-    if (k && !names[k]) names[k] = b.by
-  }
+  const dayKg = {}
+  for (const b of batches) dayKg[b.day] = (dayKg[b.day] || 0) + Number(b.kg || 0)
+  // whoever had the most production hours that day made the noodles
+  const makerOf = d => Object.entries(hrs[d] || {}).sort((x, y) => y[1] - x[1])[0]?.[0]
   const people = Object.keys(names).map(k => {
-    let hours = 0, aloneH = 0, aloneKg = 0, aloneN = 0
+    let hours = 0, madeH = 0, madeKg = 0, madeN = 0
     const otherH = Object.values(other).reduce((a, m) => a + (m[k] || 0), 0)
     for (const [d, m] of Object.entries(hrs)) {
       if (!m[k]) continue
       hours += m[k]
-      if (Object.keys(m).length === 1 && dayKg[d]) { aloneH += m[k]; aloneKg += dayKg[d]; aloneN++ }
+      if (dayKg[d] && makerOf(d) === k) { madeH += m[k]; madeKg += dayKg[d]; madeN++ }
     }
-    return { k, name: names[k], hours, otherH, kg: byKg[k] || 0, aloneH, aloneKg, aloneN }
-  }).sort((a, b) => b.hours - a.hours)
+    return { k, name: names[k], hours, otherH, madeH, madeKg, madeN }
+  }).filter(p => p.hours || p.otherH).sort((a, b) => b.hours - a.hours)
   const days = [...new Set([...Object.keys(hrs), ...Object.keys(dayKg), ...Object.keys(other)])].sort().reverse()
   const f = v => fmtNum(r1(v), t.lang)
   return (<>
     <Table title={tr('effTitle')} note={`${tr('shortNote', { h: fmtNum(Number(minH), t.lang) })}. ${tr('effNote')}`}
-      head={[tr('person'), tr('prodHours'), tr('otherWork'), tr('finishedKg'), tr('kgh'), tr('aloneDays'), tr('kgh')]}
-      rows={people.map(p => [p.name, f(p.hours), p.otherH ? `${f(p.otherH)} h` : '–', `${f(p.kg)} kg`, p.hours ? f(p.kg / p.hours) : '–',
-        p.aloneN ? `${p.aloneN} · ${f(p.aloneKg)} kg / ${f(p.aloneH)} h` : '–', p.aloneH ? <b>{f(p.aloneKg / p.aloneH)}</b> : '–'])} />
+      head={[tr('person'), tr('prodHours'), tr('otherWork'), tr('madeDays'), tr('kgh')]}
+      rows={people.map(p => [p.name, f(p.hours), p.otherH ? `${f(p.otherH)} h` : '–',
+        p.madeN ? `${p.madeN} · ${f(p.madeKg)} kg / ${f(p.madeH)} h` : '–', p.madeH ? <b>{f(p.madeKg / p.madeH)}</b> : '–'])} />
     <Table title={tr('dayTitle')} note={tr('dayNote')}
-      head={[tr('date'), tr('who'), tr('output'), tr('kgh')]}
+      head={[tr('date'), tr('who'), tr('output'), tr('maker'), tr('kgh')]}
       rows={days.map(d => {
         const m = hrs[d] || {}, h = Object.values(m).reduce((a, x) => a + x, 0)
         const o = Object.entries(other[d] || {}).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ')
         return [d, (Object.entries(m).map(([k, v]) => `${names[k]?.split(' ')[0] || k} ${f(v)} h`).join(' · ') || '–') + (o ? ` (${tr('otherWork')}: ${o})` : ''),
-          dayKg[d] ? `${f(dayKg[d])} kg` : '–', h && dayKg[d] ? f(dayKg[d] / h) : '–']
+          dayKg[d] ? `${f(dayKg[d])} kg` : '–',
+          dayKg[d] && makerOf(d) ? names[makerOf(d)]?.split(' ')[0] : '–',
+          dayKg[d] && makerOf(d) ? f(dayKg[d] / hrs[d][makerOf(d)]) : '–']
       })} />
   </>)
 }
