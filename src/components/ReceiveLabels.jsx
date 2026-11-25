@@ -4,7 +4,7 @@ import { useData } from '../lib/useData'
 import { useAuth } from '../lib/auth'
 import { useT, fmtNum } from '../lib/i18n'
 import { Modal, Field, Loading, NumInput, useToast, errText } from './ui'
-import { LABEL_SIZES, drawSimpleLabel, labelFontsReady, fmtLabelQty, readPaper, writePaper } from './LabelPrint'
+import { LABEL_SIZES, drawSimpleLabel, labelFontsReady, fmtLabelQty, readPaper, writePaper, LabelPaperExtras } from './LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 
 // label wording in the label's own language
@@ -82,14 +82,14 @@ export default function ReceiveLabels({ poId, onClose }) {
     [data, rows])
   const count = picked.reduce((s, x) => s + Math.min(x.r.copies, 50), 0)
   const first = picked[0]
-  const preview = useMemo(() => first ? drawSimpleLabel({ w, h, margin: opt.margin, textLines: textFor(first.l, first.r) }).toDataURL('image/png') : '',
+  const preview = useMemo(() => first ? drawSimpleLabel({ w, h, margin: isTouch() ? opt.marginImg : opt.margin, font: opt.font, textLines: textFor(first.l, first.r) }).toDataURL('image/png') : '',
     [first, w, h, opt, recorder, fontTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function canvases() {
+  function canvases(kind) {
     const out = []
     picked.forEach(({ l, r }) => {
       const lines = textFor(l, r)
-      for (let i = 0; i < Math.min(r.copies, 50); i++) out.push(drawSimpleLabel({ w, h, margin: opt.margin, textLines: lines }))
+      for (let i = 0; i < Math.min(r.copies, 50); i++) out.push(drawSimpleLabel({ w, h, margin: kind === 'images' ? opt.marginImg : opt.margin, font: opt.font, textLines: lines }))
     })
     return out
   }
@@ -97,7 +97,7 @@ export default function ReceiveLabels({ poId, onClose }) {
     setBusy(true)
     try {
       await labelFontsReady()
-      const cs = canvases()
+      const cs = canvases(kind)
       if (kind === 'images') await shareCanvases(cs, `P${data.po.no}`)
       else await deliverPdf(pdfFromCanvases(cs, w, h), `P${data.po.no}-labels`)
     } catch (e) { if (e?.name !== 'AbortError') toast(errText(e), 'error') }
@@ -136,7 +136,7 @@ export default function ReceiveLabels({ poId, onClose }) {
               </select>
             </Field>
             {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
-            <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0.5} max={8} onChange={v => set({ margin: v })} /></Field>
+            <LabelPaperExtras opt={opt} set={set} t={t} />
             {size.custom && <>
               <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
               <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>

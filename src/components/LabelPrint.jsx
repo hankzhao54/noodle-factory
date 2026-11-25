@@ -83,13 +83,17 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } cat
 // One paper setting for every label (batch labels, pack labels, goods-in labels), so all labels
 // come out the same height and the printer's paper never has to be changed between jobs.
 const PAPER_KEY = 'nf-label-paper'
-const PAPER_FIELDS = ['size', 'length', 'cw', 'ch', 'margin']
+const PAPER_FIELDS = ['size', 'length', 'cw', 'ch', 'margin', 'marginImg', 'font']
 // margin: blank border kept clear of text, because the printer cannot print right up to the edge
-// phones (iPhone print) add their own white border, so no extra margin there by default
-const TOUCH = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
-export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5, margin: TOUCH ? 0 : 3 }
+// margin: for PDFs (computer, or "share as PDF" on the phone); marginImg: for label images printed from the
+// phone, where iOS adds its own white border, so none by default
+export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5, margin: 3, marginImg: 0, font: 'barlow' }
+export const paperMargin = (kind, paper = readPaper()) => kind === 'image' ? paper.marginImg : paper.margin
 export function readPaper() {
-  const p = { ...PAPER_DEFAULT, ...read(PAPER_KEY, {}) }
+  const saved = read(PAPER_KEY, {})
+  const p = { ...PAPER_DEFAULT, ...saved }
+  // before Nov 2026 there was one margin; a phone that had set it to ~0 for images keeps 3 mm for PDFs
+  if (!('marginImg' in saved) && saved.margin != null && Number(saved.margin) < 1) { p.marginImg = Number(saved.margin); p.margin = 3 }
   return Object.fromEntries(PAPER_FIELDS.map(k => [k, p[k]]))
 }
 export function writePaper(opt) {
@@ -224,7 +228,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose, pack = f
       const pdf = new jsPDF({ unit: 'mm', format: [pw, ph], orientation: orient, compress: true })
       for (let i = 0; i < Math.min(copies, 200); i++) {
         if (i) pdf.addPage([pw, ph], orient)
-        let c = drawSimpleLabel({ ...label, labelId: ids(i) })
+        let c = drawSimpleLabel({ ...label, margin: opt.margin, labelId: ids(i) })
         if (rot) c = rotated(c)
         pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, pw, ph, undefined, 'FAST')
       }
@@ -237,7 +241,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose, pack = f
     try {
       const files = []
       for (let i = 0; i < Math.min(copies, 50); i++) {
-        const c = drawSimpleLabel({ ...label, labelId: ids(i) })
+        const c = drawSimpleLabel({ ...label, margin: opt.marginImg, labelId: ids(i) })
         const blob = await withDpi(await new Promise(r => c.toBlob(r, 'image/png')), DPI)
         files.push(new File([blob], `label-${ids(i).replace(/\//g, '-')}.png`, { type: 'image/png' }))
       }
@@ -288,7 +292,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose, pack = f
 
   const simple = pack || opt.template === 'simple'
   const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h, packedAt: pack ? new Date() : null,
-                  simple, recorder, amount, unit, showQr: !!opt.showQr, margin: opt.margin,
+                  simple, recorder, amount, unit, showQr: !!opt.showQr, margin: touch ? opt.marginImg : opt.margin, font: opt.font,
                   showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false, showNutrition: !!opt.showNutrition }
   const idFor = i => pack ? packId(nextSeq + i) : copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
   // packing labels: reserve the pack numbers first (recorded), then print with exactly those numbers
@@ -330,7 +334,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose, pack = f
             </select>
           </Field>
           {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
-          <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0} max={8} onChange={v => set({ margin: v })} /></Field>
+          <LabelPaperExtras opt={opt} set={set} t={t} />
           {size.custom && <div className="row-gap">
             <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
             <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>
@@ -431,7 +435,15 @@ export function Label(props) {
 /* ---- simple label drawn straight onto a canvas (what you see = what prints) ---- */
 const DPI = 300
 const PX_PER_MM = DPI / 25.4
-const FONT = '"Archivo Variable", Archivo, "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+// label fonts: narrow faces that stay sharp on a 300 dpi thermal head; weights: [regular line, bold line]
+export const LABEL_FONTS = {
+  barlow:  { name: 'Barlow Semi Condensed', family: '"Barlow Semi Condensed"', w: [600, 700], stretch: false },
+  roboto:  { name: 'Roboto Condensed', family: '"Roboto Condensed"', w: [500, 700], stretch: false },
+  archivo: { name: 'Archivo (condensed)', family: '"Archivo Variable"', w: [500, 700], stretch: true },
+}
+const FALLBACK = '"Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+let CUR = LABEL_FONTS.barlow   // the face drawSimpleLabel is drawing with
+let FONT = `${CUR.family}, ${FALLBACK}`
 // PNG with its print resolution written in (pHYs chunk), so apps that honour it print the label at its real
 // size in mm instead of guessing (a canvas PNG carries no resolution, often read as 72 dpi).
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0 } return t })()
@@ -455,11 +467,13 @@ async function withDpi(blob, dpi) {
 // iPhone Safari rejects "condensed" inside the font shorthand and silently fell back to 10px sans-serif,
 // which made phone-printed labels tiny. Where fontStretch is not supported the text is just a little wider.
 function setFont(g, weight, px) {
-  g.font = `${weight} ${px}px ${FONT}`
-  if ('fontStretch' in g) g.fontStretch = 'condensed'
+  const wgt = weight >= 700 ? CUR.w[1] : CUR.w[0]
+  g.font = `${wgt} ${px}px ${FONT}`
+  if ('fontStretch' in g) g.fontStretch = CUR.stretch ? 'condensed' : 'normal'
 }
 // 1 when the canvas really draws Archivo condensed, else the factor that imitates it
 function condensedSqueeze(g) {
+  if (!CUR.stretch) return 1
   const probe = 'Gyártás időp.: 2026.11.25 17:14'
   g.font = `500 40px ${FONT}`
   if ('fontStretch' in g) g.fontStretch = 'normal'
@@ -469,9 +483,7 @@ function condensedSqueeze(g) {
   return narrow / normal < 0.95 ? 1 : 0.79
 }
 // make sure the faces the canvas uses are loaded before drawing
-export const labelFontsReady = () => Promise.all([
-  '500 40px "Archivo Variable"', '700 40px "Archivo Variable"',
-].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
+export const labelFontsReady = () => Promise.all(Object.values(LABEL_FONTS).flatMap(f => f.w.map(w => `${w} 40px ${f.family}`)).map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
 function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId, showStorage, showProducer, packedAt }) {
   const T = L[lang] || L.hu
@@ -511,6 +523,8 @@ export function nutritionRows(product, lang) {
 
 export function drawSimpleLabel(props) {
   const { w, h, lot } = props
+  CUR = LABEL_FONTS[props.font ?? readPaper().font] || LABEL_FONTS.barlow
+  FONT = `${CUR.family}, ${FALLBACK}`
   const W = Math.round(w * PX_PER_MM), H = Math.round(h * PX_PER_MM)
   const c = document.createElement('canvas')
   c.width = W; c.height = H
@@ -732,4 +746,19 @@ function FullLabel({ product, lines, batch, expiry, lot, qr, settings, lang, ing
       </div>
     </div>
   )
+}
+
+// shared paper fields: two margins (PDF / phone image) and the font
+export function LabelPaperExtras({ opt, set, t }) {
+  return <>
+    <div className="row-gap">
+      <Field label={t('labelMarginPdf')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0} max={8} onChange={v => set({ margin: v })} /></Field>
+      <Field label={t('labelMarginImg')}><NumInput value={opt.marginImg} min={0} max={8} onChange={v => set({ marginImg: v })} /></Field>
+    </div>
+    <Field label={t('labelFont')}>
+      <select value={opt.font} onChange={e => set({ font: e.target.value })}>
+        {Object.entries(LABEL_FONTS).map(([k, f]) => <option key={k} value={k}>{f.name}</option>)}
+      </select>
+    </Field>
+  </>
 }

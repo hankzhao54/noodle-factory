@@ -75,7 +75,7 @@ export default function Deliveries() {
       const size = LABEL_SIZES.find(x => x.id === paper.size) || LABEL_SIZES[0]
       const w = size.custom ? (paper.cw || 62) : size.w
       const h = size.custom ? (paper.ch || 31.5) : size.cont ? (paper.length || 31.5) : size.h
-      const cs = list.map(o => drawSimpleLabel({ w, h, margin: paper.margin, textLines: shipLabelLines(o, shipTo(o), prod, run(o.delivery_id)) }))
+      const cs = list.map(o => drawSimpleLabel({ w, h, margin: isTouch() ? paper.marginImg : paper.margin, textLines: shipLabelLines(o, shipTo(o), prod, run(o.delivery_id)) }))
       const name = list.length === 1 ? `ship-${list[0].no}` : `ship-${date}`
       if (isTouch()) await shareCanvases(cs, name)
       else await deliverPdf(pdfFromCanvases(cs, w, h), name)

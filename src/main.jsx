@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import '@fontsource-variable/archivo/standard.css'
+// label fonts (downloaded only when a label is drawn with them)
+import '@fontsource/barlow-semi-condensed/600.css'
+import '@fontsource/barlow-semi-condensed/700.css'
+import '@fontsource/roboto-condensed/500.css'
+import '@fontsource/roboto-condensed/700.css'
 import './styles.css'
 import { installErrorLogging } from './lib/errorLog'
 
