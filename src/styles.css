@@ -687,6 +687,14 @@ textarea { resize: vertical; }
 /* ---- phone: layout fixes ---- */
 @media (max-width: 900px) {
   .shell { grid-template-rows: auto 1fr; }               /* the top bar no longer stretches on short pages */
+  /* nothing may make the page wider than the phone: the single column may shrink below its content's
+     min-width (iOS date inputs are wide by default), and the page never scrolls sideways — wide tables
+     scroll inside their own box instead */
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  html, body { overflow-x: hidden; }
+  .main, .page, .panel, .table-wrap { min-width: 0; max-width: 100%; }
+  input, select, textarea { max-width: 100%; min-width: 0; }
+  input[type=date], input[type=time], input[type=datetime-local] { -webkit-appearance: none; appearance: none; min-width: 0; min-height: 40px; }
 }
 @media (max-width: 640px) {
   /* wide tables: one line per cell, swipe sideways, first column stays in view */
