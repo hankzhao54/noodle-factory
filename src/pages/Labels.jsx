@@ -6,16 +6,18 @@ import { useT, fmtNum, fmtDate } from '../lib/i18n'
 import { Loading, ErrorBox, PageHead } from '../components/ui'
 import LabelPrint, { shelfDays } from '../components/LabelPrint'
 
-// Packing labels (Nov 2026): every label for packs made out of a production box is printed here, from the batch
-// it came out of, so it keeps that batch's lot number, production time and use-by date (traceable).
-// A batch that was packed before carries a warning, both in this list and in the print window.
+// Labels (Nov 2026): one place, made for the phone, to print both kinds of label from a finished batch:
+//  - production label (the box, ~10 kg = one batch): lot number as is (261123-30, -01/-02 for several);
+//  - packing label (packs made out of a box): the batch's lot with a pack number (261123-30/P01 …), the batch's
+//    production time and use-by date, plus a packed date; every print run is recorded and a batch that was
+//    packed before carries a warning, here and in the print window.
 const DAY = 864e5
 
-export default function PackLabels() {
+export default function Labels() {
   const t = useT()
   const [productId, setProductId] = useState('')
   const [showOld, setShowOld] = useState(false)
-  const [printFor, setPrintFor] = useState(null)
+  const [printFor, setPrintFor] = useState(null) // { id, pack }
   const { data, error, loading, reload } = useData(async () => {
     const since = new Date(Date.now() - 45 * DAY).toISOString()
     const [products, batches, packs, cfg] = await Promise.all([
@@ -45,8 +47,8 @@ export default function PackLabels() {
 
   return (
     <div className="page">
-      <PageHead title={t('packLabels')} />
-      <p className="muted">{t('packLabelsIntro')}</p>
+      <PageHead title={`🏷 ${t('nav_labels')}`} />
+      <p className="muted small">{t('labelsIntro')}</p>
       <div className="date-chips">
         <button type="button" className={!productId ? 'chip on' : 'chip'} onClick={() => setProductId('')}>{t('all')}</button>
         {data.products.map(p => <button key={p.id} type="button" className={productId === p.id ? 'chip on' : 'chip'} onClick={() => setProductId(p.id)}>{t.pick(p)}</button>)}
@@ -54,33 +56,34 @@ export default function PackLabels() {
       </div>
       {loading && <Loading />}
       {rows.length === 0 ? <p className="empty">{t('noBatchesToPack')}</p> : (
-        <div className="table-wrap"><table className="table">
-          <thead><tr>
-            <th>{t('lot')}</th><th>{t('product')}</th><th>{t('producedAt')}</th><th>{t('expiry')}</th>
-            <th className="num">{t('actualQty')}</th><th>{t('packedSoFar')}</th><th></th>
-          </tr></thead>
-          <tbody>{rows.map(b => {
-            const p = prod(b.product_id), ub = useBy(b), pk = packsOf(b.id)
-            const expired = ub && ub.getTime() < now
-            const last = pk.reduce((a, x) => (!a || x.printed_at > a.printed_at ? x : a), null)
-            return (
-              <tr key={b.id} className={expired ? 'row-muted' : ''}>
-                <td><Link to={`/trace/${encodeURIComponent(b.lot_no)}`}><b>{b.lot_no}</b></Link></td>
-                <td>{p ? t.pick(p) : '–'}</td>
-                <td>{fmtDT(b.done_at)}</td>
-                <td>{ub ? fmtDate(ub.toISOString().slice(0, 10), t.lang) : '–'}{expired && <span className="tag tag-low">{t('expired')}</span>}</td>
-                <td className="num">{fmtNum(b.actual_qty, t.lang)} {p?.unit || 'kg'}</td>
-                <td>{pk.length
-                  ? <span className="tag tag-low">⚠ {t('packedTimes', { n: pk.length, l: pk.reduce((a, x) => a + x.labels, 0), kg: fmtNum(Math.round(pk.reduce((a, x) => a + kgOf(x), 0) * 10) / 10, t.lang) })}</span>
-                  : <span className="muted">–</span>}
-                  {last && <div className="muted small">{fmtDT(last.printed_at)}{last.printed_by_name ? ` · ${last.printed_by_name}` : ''}</div>}</td>
-                <td className="num"><button className="btn btn-sm btn-primary" disabled={expired} onClick={() => setPrintFor(b.id)}>{t('printPackLabels')}</button></td>
-              </tr>
-            )
-          })}</tbody>
-        </table></div>
+        <div className="label-cards">{rows.map(b => {
+          const p = prod(b.product_id), ub = useBy(b), pk = packsOf(b.id)
+          const expired = ub && ub.getTime() < now
+          const last = pk.reduce((a, x) => (!a || x.printed_at > a.printed_at ? x : a), null)
+          return (
+            <div key={b.id} className={`label-card${expired ? ' row-muted' : ''}`}>
+              <div className="label-card-head">
+                <Link to={`/trace/${encodeURIComponent(b.lot_no)}`} className="label-card-lot">{b.lot_no}</Link>
+                <b>{p ? t.pick(p) : '–'}</b>
+                <span className="muted">{fmtNum(b.actual_qty, t.lang)} {p?.unit || 'kg'}</span>
+              </div>
+              <div className="muted small">
+                {t('producedAt')}: {fmtDT(b.done_at)} · {t('expiry')}: {ub ? fmtDate(ub.toISOString().slice(0, 10), t.lang) : '–'}
+                {expired && <span className="tag tag-low">{t('expired')}</span>}
+              </div>
+              {pk.length > 0 && <div className="label-card-packed">
+                <span className="tag tag-low">⚠ {t('packedTimes', { n: pk.length, l: pk.reduce((a, x) => a + x.labels, 0), kg: fmtNum(Math.round(pk.reduce((a, x) => a + kgOf(x), 0) * 10) / 10, t.lang) })}</span>
+                {last && <span className="muted small"> {fmtDT(last.printed_at)}{last.printed_by_name ? ` · ${last.printed_by_name}` : ''}</span>}
+              </div>}
+              <div className="label-card-actions">
+                <button className="btn" disabled={expired} onClick={() => setPrintFor({ id: b.id, pack: false })}>🏷 {t('boxLabel')}</button>
+                <button className="btn btn-primary" disabled={expired} onClick={() => setPrintFor({ id: b.id, pack: true })}>📦 {t('packLabel')}</button>
+              </div>
+            </div>
+          )
+        })}</div>
       )}
-      {printFor && <LabelPrint pack batchId={printFor} onPrinted={reload} onClose={() => { setPrintFor(null); reload() }} />}
+      {printFor && <LabelPrint pack={printFor.pack} batchId={printFor.id} onPrinted={reload} onClose={() => { setPrintFor(null); reload() }} />}
     </div>
   )
 }

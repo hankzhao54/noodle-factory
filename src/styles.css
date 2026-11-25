@@ -660,3 +660,13 @@ textarea { resize: vertical; }
 .note-edit { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .note-edit textarea { width: 100%; }
 .note-edit-btns { display: flex; gap: 6px; }
+
+/* Labels page (made for the phone) + the shortcut in the mobile top bar */
+.label-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+.label-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.label-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.label-card-lot { font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 17px; }
+.label-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.label-card-actions .btn { min-height: 48px; font-size: 16px; justify-content: center; }
+.topbar-labels { margin-left: auto; background: var(--kansui); color: var(--ink) !important; border-radius: 999px; padding: 7px 14px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.topbar-labels.active { opacity: .85; }

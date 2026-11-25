@@ -29,7 +29,7 @@ import LegalPage from './legal/LegalPage'
 import Activity from './pages/Activity'
 import MonthlyReport from './pages/MonthlyReport'
 import Costs from './pages/Costs'
-import PackLabels from './pages/PackLabels'
+import Labels from './pages/Labels'
 
 
 export default function App() {
@@ -94,7 +94,7 @@ function StaffShell() {
   useEffect(() => setOpen(false), [loc.pathname])
 
   const work = [
-    ['/', 'nav_dashboard'], ['/orders', 'nav_orders'], ['/production', 'nav_production'], ['/pack-labels', 'nav_packLabels'],
+    ['/', 'nav_dashboard'], ['/labels', 'nav_labels'], ['/orders', 'nav_orders'], ['/production', 'nav_production'],
     ['/deliveries', 'nav_deliveries'], ['/inventory', 'nav_inventory'], ['/purchasing', 'nav_purchasing'], ['/reports', 'nav_reports'],
   ]
   const setup = [
@@ -123,6 +123,7 @@ function StaffShell() {
       <div className="topbar">
         <button className="btn-icon" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>☰</button>
         <span className="topbar-title">{t('appName')}</span>
+        <NavLink to="/labels" className="topbar-labels">🏷 {t('nav_labels')}</NavLink>
       </div>
       <div className="scrim" onClick={() => setOpen(false)} />
       <IdleLogout />
@@ -131,7 +132,8 @@ function StaffShell() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/production" element={<Production />} />
-          <Route path="/pack-labels" element={<PackLabels />} />
+          <Route path="/labels" element={<Labels />} />
+          <Route path="/pack-labels" element={<Navigate to="/labels" replace />} />
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/purchasing" element={<Purchasing />} />
