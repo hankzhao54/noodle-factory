@@ -683,3 +683,30 @@ textarea { resize: vertical; }
   .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 @media print { .tabbar { display: none !important; } }
+
+/* ---- phone: layout fixes ---- */
+@media (max-width: 900px) {
+  .shell { grid-template-rows: auto 1fr; }               /* the top bar no longer stretches on short pages */
+}
+@media (max-width: 640px) {
+  /* wide tables: one line per cell, swipe sideways, first column stays in view */
+  .table th, .table td { white-space: nowrap; padding: 9px 10px; }
+  .table td:first-child, .table th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); box-shadow: 1px 0 0 var(--line-2); }
+  .table th:first-child { background: #FAFBF9; }
+  .table-wrap { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+    background: linear-gradient(to left, rgba(30,42,47,.10), transparent 14px) right / 14px 100% no-repeat local,
+                linear-gradient(to left, rgba(30,42,47,.12), transparent 14px) right / 14px 100% no-repeat scroll; }
+  .page { padding-left: 12px; padding-right: 12px; }
+
+  /* order list as cards */
+  .table-wrap:has(> .orders-table) { background: none; }
+  .orders-table thead { display: none; }
+  .orders-table, .orders-table tbody { display: block; }
+  .orders-table tr { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "no date status" "cust cust total" "lines lines lines";
+                     gap: 4px 10px; padding: 12px; border-bottom: 1px solid var(--line-2); align-items: center; }
+  .orders-table td { display: block; padding: 0; border: 0; white-space: normal; position: static !important; box-shadow: none !important; background: none !important; }
+  .orders-table .c-no { grid-area: no; } .orders-table .c-date { grid-area: date; font-weight: 600; }
+  .orders-table .c-status { grid-area: status; } .orders-table .c-cust { grid-area: cust; }
+  .orders-table .c-total { grid-area: total; } .orders-table .c-lines { grid-area: lines; }
+  .orders-table .c-created, .orders-table .c-by { display: none; }
+}

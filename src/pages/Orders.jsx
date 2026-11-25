@@ -51,26 +51,26 @@ export default function Orders() {
         ['confirmed', t('o_confirmed')], ['delivered', t('o_delivered')], ['all', t('all')],
       ]} />
       {shown.length === 0 ? <Empty /> : (
-        <div className="table-wrap"><table className="table">
+        <div className="table-wrap"><table className="table orders-table">
           <thead><tr><th>#</th><th>{t('orderedAt')}</th><th>{t('deliveryDate')}</th><th>{t('customer')}</th><th>{t('orderedBy')}</th><th>{t('lines')}</th>
             <th className="num">{t('total')}</th><th>{t('status')}</th></tr></thead>
           <tbody>{shown.map(o => (
             <tr key={o.id} className="clickable" onClick={() => setDetail(o)}>
-              <td className="mono-num">#{o.no}</td>
-              <td className="nowrap muted small">{new Date(o.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-              <td className="nowrap">{fmtDate(o.delivery_date, t.lang)}</td>
-              <td><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
+              <td className="mono-num c-no">#{o.no}</td>
+              <td className="nowrap muted small c-created">{new Date(o.created_at).toLocaleString(t.lang === 'hu' ? 'hu-HU' : t.lang === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+              <td className="nowrap c-date">{fmtDate(o.delivery_date, t.lang)}</td>
+              <td className="c-cust"><b>{cust(o.customer_id).name}</b> {cust(o.customer_id).type === 'internal' && <span className="tag tag-internal">{t('internal')}</span>}
                 {o.urgent && <span className="tag tag-urgent">🚨 {t('urgent')}</span>}
                 {o.is_sample && <span className="tag tag-sample">🎁 {t('sampleTag')}</span>}
                 {data.requests.some(r => r.order_id === o.id) && <span className="tag tag-low">✋ {t('changeRequestTag')}</span>}
                 {o.store && <div className="muted small">{o.store.name}</div>}</td>
-              <td className="muted small">{data.names[o.created_by] || '–'}</td>
-              <td className="muted small">{o.order_lines.map(l => {
+              <td className="muted small c-by">{data.names[o.created_by] || '–'}</td>
+              <td className="muted small c-lines">{o.order_lines.map(l => {
                 const p = data.products.find(x => x.id === l.product_id) || {}
                 return `${t.pick(p)} ${fmtNum(l.qty, t.lang)}${p.unit || ''}${hasPacking(l) ? ' 📦' : ''}`
               }).join(', ')}</td>
-              <td className="num">{fmtFt(total(o), t.lang)}</td>
-              <td><Status value={o.status} prefix="o" /></td>
+              <td className="num c-total">{fmtFt(total(o), t.lang)}</td>
+              <td className="c-status"><Status value={o.status} prefix="o" /></td>
             </tr>
           ))}</tbody>
         </table></div>
