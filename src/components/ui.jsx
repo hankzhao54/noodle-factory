@@ -135,8 +135,12 @@ export function NumInput({ value, onChange, onBlur, min, max, step, ...rest }) {
   const show = v => (v === null || v === undefined || Number.isNaN(v) ? '' : String(v))
   const [text, setText] = useState(show(value))
   const last = useRef(value)
+  const focused = useRef(false)
   useEffect(() => {
-    // only an outside change resets the text (null and 0 count as the same, e.g. an empty quantity)
+    // only an outside change resets the text (null and 0 count as the same, e.g. an empty quantity).
+    // While the field is being edited and was just cleared, a parent that puts its default back
+    // (value ?? default) must not refill it: typing "4" → clear → "1" has to be possible.
+    if (focused.current && last.current == null) return
     if (Number(value ?? 0) !== Number(last.current ?? 0)) {
       last.current = value; setText(show(value))
     }
@@ -154,7 +158,11 @@ export function NumInput({ value, onChange, onBlur, min, max, step, ...rest }) {
   return (
     <input type="text" inputMode="decimal" autoComplete="off" {...rest}
       value={text} onChange={change}
+      onFocus={e => { focused.current = true; rest.onFocus?.(e) }}
       onBlur={e => {
+        focused.current = false
+        // left empty: show whatever the parent holds now (its default), not an empty box
+        if (last.current == null && value != null) { last.current = value; setText(show(value)); onBlur?.(e); return }
         // keep within min / max (a text field has no built-in range check)
         let n = last.current
         if (n != null && min !== undefined && n < Number(min)) n = Number(min)
