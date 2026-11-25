@@ -85,7 +85,9 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } cat
 const PAPER_KEY = 'nf-label-paper'
 const PAPER_FIELDS = ['size', 'length', 'cw', 'ch', 'margin']
 // margin: blank border kept clear of text, because the printer cannot print right up to the edge
-export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5, margin: 3 }
+// phones (iPhone print) add their own white border, so no extra margin there by default
+const TOUCH = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+export const PAPER_DEFAULT = { size: 'dk22205', length: 31.5, cw: 62, ch: 31.5, margin: TOUCH ? 0 : 3 }
 export function readPaper() {
   const p = { ...PAPER_DEFAULT, ...read(PAPER_KEY, {}) }
   return Object.fromEntries(PAPER_FIELDS.map(k => [k, p[k]]))
@@ -328,7 +330,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose, pack = f
             </select>
           </Field>
           {size.cont && <Field label={t('labelLength')} hint={t('paperShared')}><NumInput value={opt.length} min={20} max={300} onChange={v => set({ length: v })} /></Field>}
-          <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0.5} max={8} onChange={v => set({ margin: v })} /></Field>
+          <Field label={t('labelMargin')} hint={t('labelMarginHint')}><NumInput value={opt.margin} min={0} max={8} onChange={v => set({ margin: v })} /></Field>
           {size.custom && <div className="row-gap">
             <Field label={t('labelWidth')}><NumInput value={opt.cw} min={20} max={200} onChange={v => set({ cw: v })} /></Field>
             <Field label={t('labelHeight')}><NumInput value={opt.ch} min={15} max={300} onChange={v => set({ ch: v })} /></Field>
@@ -524,7 +526,7 @@ export function drawSimpleLabel(props) {
     g.save(); g.translate(x, y); g.scale(sq, 1); g.fillText(text, 0, 0); g.restore()
   }
   const m = Number(props.margin ?? PAPER_DEFAULT.margin)
-  const pad = Math.max(0.5, Math.min(8, isNaN(m) ? 3 : m)) * PX_PER_MM, gap = 1.4 * PX_PER_MM
+  const pad = Math.max(0.3, Math.min(8, isNaN(m) ? 3 : m)) * PX_PER_MM, gap = 1.4 * PX_PER_MM
 
   // QR (optional): whole-pixel modules so it stays sharp on a 300 dpi head
   let x0 = Math.round(pad)
@@ -624,6 +626,14 @@ export function drawSimpleLabel(props) {
     }
     g.textAlign = 'left'
   }
+  // thermal printers print only black or white: turn the anti-aliased grey edges into pure black/white,
+  // so letters stay sharp instead of being dithered (and blurred further when the phone rescales the image)
+  const img = g.getImageData(0, 0, W, H), bits = img.data
+  for (let i = 0; i < bits.length; i += 4) {
+    const v = bits[i] * 0.299 + bits[i + 1] * 0.587 + bits[i + 2] * 0.114 < 165 ? 0 : 255
+    bits[i] = bits[i + 1] = bits[i + 2] = v; bits[i + 3] = 255
+  }
+  g.putImageData(img, 0, 0)
   return c
 }
 
