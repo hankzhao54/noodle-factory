@@ -430,9 +430,16 @@ export function Label(props) {
 const DPI = 300
 const PX_PER_MM = DPI / 25.4
 const FONT = '"Archivo Variable", Archivo, "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif'
+// Canvas font: weight + size + family only. The condensed width is set separately (ctx.fontStretch):
+// iPhone Safari rejects "condensed" inside the font shorthand and silently fell back to 10px sans-serif,
+// which made phone-printed labels tiny. Where fontStretch is not supported the text is just a little wider.
+function setFont(g, weight, px) {
+  g.font = `${weight} ${px}px ${FONT}`
+  if ('fontStretch' in g) g.fontStretch = 'condensed'
+}
 // make sure the faces the canvas uses are loaded before drawing
 export const labelFontsReady = () => Promise.all([
-  'condensed 500 40px "Archivo Variable"', 'condensed 700 40px "Archivo Variable"',
+  '500 40px "Archivo Variable"', '700 40px "Archivo Variable"',
 ].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
 function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId, showStorage, showProducer, packedAt }) {
@@ -505,9 +512,9 @@ export function drawSimpleLabel(props) {
   const nutHead = nut ? (NUT_T[props.lang] || NUT_T.hu).head : ''
   const total = W - x0 - pad, maxH = H - 2 * pad
   const ruleGap = nut ? gap : 0
-  const fontOf = (l, px) => `condensed ${l.bold ? 700 : 500} ${l.bold ? px * 1.05 : px}px ${FONT}`
+  const fontOf = (l, px) => [l.bold ? 700 : 500, l.bold ? px * 1.05 : px]
   const wrap = (text, font, width) => {
-    g.font = font
+    setFont(g, ...font)
     if (g.measureText(text).width <= width) return [text]
     const words = text.split(' '), out = []
     let cur = ''
@@ -525,7 +532,7 @@ export function drawSimpleLabel(props) {
     for (const l of lines) {
       // the name, IDs, dates and quantities never wrap; storage, producer, address etc. may
       const keep = l.bold || /\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}|^\S+:\s*[\d#]|ID:|\d\s*(kg|g|db|pcs)\b/.test(l.text)
-      const parts = keep ? (g.font = fontOf(l, px), g.measureText(l.text).width <= mainW ? [l.text] : null)
+      const parts = keep ? (setFont(g, ...fontOf(l, px)), g.measureText(l.text).width <= mainW ? [l.text] : null)
                                                            : wrap(l.text, fontOf(l, px), mainW)
       if (!parts) return null
       parts.forEach(t => main.push({ ...l, text: t }))
@@ -533,11 +540,11 @@ export function drawSimpleLabel(props) {
     if (main.length * lh > maxH) return null
     const rows = []
     if (nut) {
-      g.font = `condensed 700 ${px}px ${FONT}`
+      setFont(g, 700, px)
       if (g.measureText(nutHead).width > nutW) return null
-      const f = `condensed 500 ${px}px ${FONT}`
+      const f = [500, px]
       for (const r of nut) {
-        g.font = f
+        setFont(g, ...f)
         const vw = g.measureText(r.v).width
         const ks = r.k ? wrap(r.k, f, nutW - vw - px * 0.5) : ['']
         if (!ks) return null
@@ -566,13 +573,13 @@ export function drawSimpleLabel(props) {
   const { px, lh, main, rows } = L0
   g.textBaseline = 'middle'
   let y = (H - main.length * lh) / 2 + lh / 2
-  for (const l of main) { g.font = fontOf(l, px); g.fillText(l.text, x0, y); y += lh }
+  for (const l of main) { setFont(g, ...fontOf(l, px)); g.fillText(l.text, x0, y); y += lh }
   if (nut) {
     const nx = x0 + mainW + ruleGap * 2, rx = W - pad
     g.fillRect(Math.round(x0 + mainW + ruleGap), Math.round(pad), Math.max(1, Math.round(PX_PER_MM * 0.15)), Math.round(maxH))
     let ny = (H - (rows.length + 1) * lh) / 2 + lh / 2
-    g.font = `condensed 700 ${px}px ${FONT}`; g.textAlign = 'left'; g.fillText(nutHead, nx, ny); ny += lh
-    g.font = `condensed 500 ${px}px ${FONT}`
+    setFont(g, 700, px); g.textAlign = 'left'; g.fillText(nutHead, nx, ny); ny += lh
+    setFont(g, 500, px)
     for (const r of rows) {
       g.textAlign = 'left'; g.fillText(r.k, nx, ny)
       if (r.v) { g.textAlign = 'right'; g.fillText(r.v, rx, ny) }
