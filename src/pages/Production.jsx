@@ -186,7 +186,7 @@ function AddBatch({ init, products, onClose, onDone }) {
   )
 }
 
-function Finish({ batch, product, onClose, onDone }) {
+export function Finish({ batch, product, onClose, onDone }) {
   const t = useT()
   const toast = useToast()
   const theo = batch.batches * theoYield(product)

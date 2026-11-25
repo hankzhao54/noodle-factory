@@ -143,6 +143,7 @@ function StaffShell() {
           <Route path="/production" element={<Production />} />
           <Route path="/labels" element={<Labels />} />
           <Route path="/pack-labels" element={<Navigate to="/labels" replace />} />
+          <Route path="/driver" element={<Navigate to="/deliveries?driver=1" replace />} />
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/purchasing" element={<Purchasing />} />

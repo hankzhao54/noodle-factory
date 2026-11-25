@@ -10,6 +10,7 @@ import { packFees, packText, packTextHu, lineFee, hasPacking, lineBags } from '.
 import { allergenName, drawSimpleLabel, labelFontsReady, readPaper, LABEL_SIZES } from '../components/LabelPrint'
 import { isTouch, shareCanvases, pdfFromCanvases, deliverPdf } from '../lib/labelOutput'
 import { Modal, Field, Loading, ErrorBox, PageHead, Status, NumInput, useToast, errText } from '../components/ui'
+import { useAuth } from '../lib/auth'
 
 export const PROOF_BUCKET = 'noodle-delivery-proofs'
 const OPEN = ['submitted', 'confirmed', 'ready']
@@ -19,6 +20,14 @@ export default function Deliveries() {
   const toast = useToast()
   const [date, setDate] = useState(() => new URLSearchParams(window.location.search).get('date') || todayISO())
   const [modal, setModal] = useState(null)      // {kind, ...}
+  // driver mode (phone): one run's stops, big buttons for navigation, calling, the note and "delivered"
+  const [driver, setDriver] = useState(() => new URLSearchParams(window.location.search).get('driver') === '1')
+  const toggleDriver = on => {
+    setDriver(on)
+    const u = new URL(window.location.href)
+    if (on) u.searchParams.set('driver', '1'); else u.searchParams.delete('driver')
+    window.history.replaceState(null, '', u)
+  }
   const [printList, setPrintList] = useState(null)
   // company details for the notes: load them now, not when printing starts (they would arrive too late)
   const info = usePublicInfo()
@@ -127,11 +136,15 @@ export default function Deliveries() {
 
   return (
     <div className="page">
-      <PageHead title={t('nav_deliveries')}>
+      <PageHead title={driver ? `🚚 ${t('driverMode')}` : t('nav_deliveries')}>
         <input type="date" value={date} onChange={e => setDate(e.target.value)} aria-label={t('date')} />
-        <button className="btn" onClick={() => setModal({ kind: 'run' })}>{t('newRun')}</button>
-        <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>{t('newDeliveryForCustomer')}</button>
+        <button className={driver ? 'btn btn-primary' : 'btn'} onClick={() => toggleDriver(!driver)}>{driver ? t('driverExit') : `🚚 ${t('driverMode')}`}</button>
+        {!driver && <>
+          <button className="btn" onClick={() => setModal({ kind: 'run' })}>{t('newRun')}</button>
+          <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>{t('newDeliveryForCustomer')}</button>
+        </>}
       </PageHead>
+      {driver ? <DriverView groups={groups} ctx={ctx} /> : <>
 
       {data.orders.length > 0 && (
         <p className="day-summary">
@@ -167,6 +180,7 @@ export default function Deliveries() {
       ))}
 
       <EarlyOrders date={date} ctx={ctx} />
+      </>}
 
       {modal?.kind === 'new' && <NewDelivery date={date} ctx={ctx} onClose={() => setModal(null)} />}
       {modal?.kind === 'run' && <RunForm date={date} run={modal.run} onClose={() => setModal(null)} onDone={() => { setModal(null); reload() }} />}
@@ -178,6 +192,69 @@ export default function Deliveries() {
           {printList.map(o => <DeliveryNote key={o.id} order={o} customer={shipTo(o)} prod={prod} run={run(o.delivery_id)} pinfo={data.pinfo} info={info} />)}
         </div>, document.body)}
     </div>
+  )
+}
+
+/* ---------------- driver mode (phone) ---------------- */
+function DriverView({ groups, ctx }) {
+  const t = useT()
+  const { profile } = useAuth()
+  const me = (profile?.display_name || '').trim().toLowerCase()
+  const withStops = groups.filter(g => g.orders.length)
+  const mine = withStops.find(g => g.run?.driver && g.run.driver.trim().toLowerCase() === me)
+  const [key, setKey] = useState(null)
+  const g = withStops.find(x => (x.run?.id || 'none') === key) || mine || withStops[0]
+  if (!g) return <p className="empty">{t('emptyDeliveries')}</p>
+  const runName = x => x.run ? `D${x.run.no}${x.run.driver ? ' · ' + x.run.driver : ''}` : t('notOnRun')
+  const open = g.orders.filter(o => o.status !== 'delivered'), done = g.orders.filter(o => o.status === 'delivered')
+  return (
+    <div className="driver">
+      {withStops.length > 1 && <div className="date-chips">{withStops.map(x => (
+        <button key={x.run?.id || 'none'} type="button" className={x === g ? 'chip on' : 'chip'} onClick={() => setKey(x.run?.id || 'none')}>{runName(x)}</button>
+      ))}</div>}
+      <p className="driver-progress"><b>{runName(g)}</b> · {t('deliveredOf', { a: done.length, b: g.orders.length })}</p>
+      {open.map((o, i) => <DriverStop key={o.id} n={i + 1} order={o} ctx={ctx} />)}
+      {open.length === 0 && <p className="note-box">✓ {t('driverAllDone')}</p>}
+      {done.length > 0 && <details className="driver-done"><summary>{t('driverDelivered', { n: done.length })}</summary>
+        {done.map(o => <DriverStop key={o.id} order={o} ctx={ctx} />)}</details>}
+    </div>
+  )
+}
+
+function DriverStop({ n, order: o, ctx }) {
+  const t = useT()
+  const c = ctx.shipTo(o)
+  const delivered = o.status === 'delivered'
+  const tel = c.phone ? c.phone.replace(/[^\d+]/g, '') : null
+  const nav = c.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}` : null
+  const bag = packFees(usePublicInfo()).bag
+  return (
+    <article className={`driver-stop ${delivered ? 'is-done' : ''}`}>
+      <header>
+        {n && <span className="driver-n">{n}</span>}
+        <div className="grow">
+          <h3>{c.name}</h3>
+          <div className="muted small">#{o.no}{o.is_sample ? ` · 🎁 ${t('sampleTag')}` : ''}{o.urgent ? ` · 🚨 ${t('urgent')}` : ''}</div>
+        </div>
+        <Status value={o.status} prefix="o" />
+      </header>
+      {c.address ? <a className="driver-addr" href={nav} target="_blank" rel="noreferrer">📍 {c.address}</a>
+        : <p className="muted small">{t('noAddress')}</p>}
+      {(c.contact_person || c.phone) && <p className="small">{c.contact_person}{c.contact_person && c.phone ? ' · ' : ''}{c.phone}</p>}
+      {c.delivery_notes && <p className="note-inline small">{c.delivery_notes}</p>}
+      {o.notes && <p className="small">📝 {o.notes}</p>}
+      <ul className="driver-lines">{o.order_lines.map(l => {
+        const p = ctx.prod(l.product_id)
+        return <li key={l.id}><span>{pickName(p, t.lang)}{hasPacking(l) ? <span className="muted"> · {packText(t, l, bag)}</span> : null}</span>
+          <b>{fmtNum(delivered ? l.delivered_qty ?? l.qty : l.qty, t.lang)} {p.unit || 'kg'}</b></li>
+      })}</ul>
+      {!delivered && <div className="driver-actions">
+        {nav ? <a className="btn" href={nav} target="_blank" rel="noreferrer">🧭 {t('navigate')}</a> : <span />}
+        {tel ? <a className="btn" href={`tel:${tel}`}>📞 {t('call')}</a> : <span />}
+        <button className="btn" onClick={() => ctx.print(ctx.sameStop(o))}>🧾 {t('note')}</button>
+        <button className="btn btn-primary driver-done-btn" onClick={() => ctx.setModal({ kind: 'deliver', order: o })}>✓ {t('confirmDelivered')}</button>
+      </div>}
+    </article>
   )
 }
 
