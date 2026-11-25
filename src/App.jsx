@@ -56,6 +56,8 @@ export default function App() {
   )
 }
 
+const Icon = ({ d }) => <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+
 function Gate() {
   const { session, profile } = useAuth()
   const { setLang } = useLang()
@@ -123,10 +125,17 @@ function StaffShell() {
       <div className="topbar">
         <button className="btn-icon" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>☰</button>
         <span className="topbar-title">{t('appName')}</span>
-        <NavLink to="/labels" className="topbar-labels">🏷 {t('nav_labels')}</NavLink>
       </div>
       <div className="scrim" onClick={() => setOpen(false)} />
       <IdleLogout />
+      {/* phone: app-style tab bar; "More" opens the full menu */}
+      <nav className="tabbar" aria-label="Tabs">
+        <NavLink to="/" end><Icon d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /><span>{t('tab_today')}</span></NavLink>
+        <NavLink to="/orders"><Icon d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" /><span>{t('tab_orders')}</span></NavLink>
+        <NavLink to="/labels" className="tab-main"><Icon d="M3 12V4h8l10 10-8 8zM7.5 8.5h.01" /><span>{t('tab_labels')}</span></NavLink>
+        <NavLink to="/deliveries"><Icon d="M3 6h11v10H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.1M17 19a2 2 0 1 0 0-.1" /><span>{t('tab_deliveries')}</span></NavLink>
+        <button type="button" className={open ? 'active' : ''} onClick={() => setOpen(o => !o)}><Icon d="M4 7h16M4 12h16M4 17h16" /><span>{t('tab_more')}</span></button>
+      </nav>
       <main className="main">
         <Routes>
           <Route path="/" element={<Dashboard />} />

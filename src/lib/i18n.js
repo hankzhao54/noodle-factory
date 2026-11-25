@@ -828,6 +828,8 @@ const D = {
   sampleOff: ['已取消样品，价格已恢复', 'No longer a sample, prices restored', 'Már nem minta, árak visszaállítva'],
   sampleHint: ['样品：价格和包装费改为 0，不进月底开票，送货单上写「INGYENES MINTA」', 'Sample: prices and packing fees 0, not invoiced, delivery note says “INGYENES MINTA”', 'Minta: ár és csomagolási díj 0, nem számlázzuk, a szállítólevélen „INGYENES MINTA”'],
   rpSamples: ['样品（免费，不开票）', 'Free samples (not invoiced)', 'Ingyenes minták (nem számlázott)'],
+  tab_today: ['今日', 'Today', 'Ma'], tab_orders: ['订单', 'Orders', 'Rendelések'], tab_labels: ['标签', 'Labels', 'Címkék'],
+  tab_deliveries: ['送货', 'Deliveries', 'Szállítás'], tab_more: ['更多', 'More', 'Továbbiak'],
   nav_labels: ['打印标签', 'Print labels', 'Címkenyomtatás'],
   labelsIntro: ['选批次打印：「生产标签」贴在装盒（一锅）上；「打包标签」用在从这盒分装出来的包装上，沿用这个批次的批号、生产时间和到期日，批号后加打包序号（/P01、/P02…），每次打印都会记下来。', 'Pick the batch: “Production label” goes on the box (one batch); “Packing label” goes on packs made out of that box and keeps the batch’s lot, production time and use-by date, with a pack number (/P01, /P02 …). Packing labels are recorded.', 'Válaszd ki a tételt: a „Gyártási címke” a dobozra (egy adag) kerül; a „Csomagolási címke” az abból készült csomagokra, a tétel számával, gyártási idejével és lejáratával, csomagszámmal (/P01, /P02 …). A csomagolási címkéket rögzítjük.'],
   boxLabel: ['生产标签', 'Production label', 'Gyártási címke'],
