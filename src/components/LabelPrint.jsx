@@ -21,9 +21,9 @@ export const LABEL_SIZES = [
 
 // fixed label wording, in the label's own language (independent of the UI language)
 const L = {
-  hu: { id: 'Azon', recorder: 'Rögzítő', producedAt: 'Gyártás időp.', qty: 'Mennyiség', units: { g: 'gramm', kg: 'kg', pcs: 'darab' }, produced: 'Gyártva', useBy: 'Fogyasztható', lot: 'Tétel', storage: 'Tárolás', net: 'Nettó tömeg', allergens: 'Allergének', ingredients: 'Összetevők', producer: 'Gyártó' },
-  en: { id: 'ID', recorder: 'Recorded by', producedAt: 'Produced', qty: 'Quantity', units: { g: 'g', kg: 'kg', pcs: 'pcs' }, produced: 'Produced', useBy: 'Use by', lot: 'Lot', storage: 'Storage', net: 'Net weight', allergens: 'Allergens', ingredients: 'Ingredients', producer: 'Producer' },
-  zh: { id: '编号', recorder: '记录人', producedAt: '生产时间', qty: '数量', units: { g: '克', kg: '公斤', pcs: '个' }, produced: '生产日期', useBy: '保质期至', lot: '批号', storage: '储存', net: '净含量', allergens: '过敏原', ingredients: '配料', producer: '生产商' },
+  hu: { id: 'Azon', recorder: 'Rögzítő', producedAt: 'Gyártás időp.', packed: 'Csomagolva', qty: 'Mennyiség', units: { g: 'gramm', kg: 'kg', pcs: 'darab' }, produced: 'Gyártva', useBy: 'Fogyasztható', lot: 'Tétel', storage: 'Tárolás', net: 'Nettó tömeg', allergens: 'Allergének', ingredients: 'Összetevők', producer: 'Gyártó' },
+  en: { id: 'ID', recorder: 'Recorded by', producedAt: 'Produced', packed: 'Packed', qty: 'Quantity', units: { g: 'g', kg: 'kg', pcs: 'pcs' }, produced: 'Produced', useBy: 'Use by', lot: 'Lot', storage: 'Storage', net: 'Net weight', allergens: 'Allergens', ingredients: 'Ingredients', producer: 'Producer' },
+  zh: { id: '编号', recorder: '记录人', producedAt: '生产时间', packed: '包装日期', qty: '数量', units: { g: '克', kg: '公斤', pcs: '个' }, produced: '生产日期', useBy: '保质期至', lot: '批号', storage: '储存', net: '净含量', allergens: '过敏原', ingredients: '配料', producer: '生产商' },
 }
 // the 14 EU allergens, keyed by common spellings
 const ALLERGEN = {
@@ -101,7 +101,9 @@ export function traceUrl(lot) {
 }
 
 // sampleProductId: print a test label for that product (no batch, nothing is saved)
-export default function LabelPrint({ batchId, sampleProductId, onClose }) {
+// pack: packing labels from the Packing labels page — the batch's lot with a pack number (261123-30/P01),
+// the batch's own production and use-by dates, a "packed" date; every print run is recorded (reserve_pack_labels)
+export default function LabelPrint({ batchId, sampleProductId, onClose, pack = false, onPrinted }) {
   const t = useT()
   const toast = useToast()
   const { isAdmin, profile } = useAuth()
@@ -123,6 +125,10 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   const renderBox = useRef(null)
   const [qr, setQr] = useState('')
   const [settings, setSettings] = useState(null)
+  const [packNote, setPackNote] = useState('')
+  const packs = useData(() => pack && batchId ? q(db.from('pack_labels').select('*').eq('batch_id', batchId).order('printed_at')) : Promise.resolve([]), [pack, batchId])
+  const nextSeq = (packs.data || []).reduce((m, x) => Math.max(m, x.seq_to), 0) + 1
+  const packId = n => `${data?.batch.lot_no || ''}/P${String(n).padStart(2, '0')}`
   const set = patch => setOpt(o => { const n = { ...o, ...patch }; write('nf-label-v3', n); writePaper(n); return n })
 
   const { data, error } = useData(async () => {
@@ -208,7 +214,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
     return r
   }
 
-  function printSimple() {
+  function printSimple(ids = idFor) {
     try {
       const rot = false
       const pw = w, ph = h
@@ -216,7 +222,7 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
       const pdf = new jsPDF({ unit: 'mm', format: [pw, ph], orientation: orient, compress: true })
       for (let i = 0; i < Math.min(copies, 200); i++) {
         if (i) pdf.addPage([pw, ph], orient)
-        let c = drawSimpleLabel({ ...label, labelId: idFor(i) })
+        let c = drawSimpleLabel({ ...label, labelId: ids(i) })
         if (rot) c = rotated(c)
         pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, pw, ph, undefined, 'FAST')
       }
@@ -225,13 +231,13 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   }
 
   // PNG images, one per label: for Brother iPrint&Label or other label apps
-  async function shareImages() {
+  async function shareImages(ids = idFor) {
     try {
       const files = []
       for (let i = 0; i < Math.min(copies, 50); i++) {
-        const c = drawSimpleLabel({ ...label, labelId: idFor(i) })
+        const c = drawSimpleLabel({ ...label, labelId: ids(i) })
         const blob = await new Promise(r => c.toBlob(r, 'image/png'))
-        files.push(new File([blob], `label-${idFor(i)}.png`, { type: 'image/png' }))
+        files.push(new File([blob], `label-${ids(i).replace(/\//g, '-')}.png`, { type: 'image/png' }))
       }
       if (navigator.canShare?.({ files })) await navigator.share({ files })
       else {
@@ -278,23 +284,44 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
   if (error) return <Modal title={t('printLabels')} onClose={onClose}><p className="error-box">{errText(error)}</p></Modal>
   if (!data || !settings) return <Modal title={t('printLabels')} onClose={onClose}><Loading /></Modal>
 
-  const simple = opt.template === 'simple'
-  const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h,
+  const simple = pack || opt.template === 'simple'
+  const label = { ...data, lot, qr, settings, lang: opt.lang, ingredients: opt.ingredients, w, h, packedAt: pack ? new Date() : null,
                   simple, recorder, amount, unit, showQr: !!opt.showQr, margin: opt.margin,
                   showStorage: opt.showStorage !== false, showProducer: opt.showProducer !== false, showNutrition: !!opt.showNutrition }
-  const idFor = i => copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
+  const idFor = i => pack ? packId(nextSeq + i) : copies > 1 ? `${lot}-${String(i + 1).padStart(2, '0')}` : lot
+  // packing labels: reserve the pack numbers first (recorded), then print with exactly those numbers
+  async function packPrint(fn) {
+    try {
+      const from = await q(db.rpc('reserve_pack_labels', { p_batch: batchId, p_labels: Math.min(copies, 200), p_qty: amount, p_unit: unit, p_note: packNote || null }))
+      await fn(i => packId(from + i))
+      packs.reload(); onPrinted?.()
+    } catch (e) { toast(errText(e), 'error') }
+  }
+  const prevPacks = packs.data || []
+  const prevLabels = prevPacks.reduce((a, x) => a + x.labels, 0)
+  const prevKg = prevPacks.reduce((a, x) => a + (x.unit === 'kg' ? x.labels * Number(x.qty_per_label || 0) : x.unit === 'g' ? x.labels * Number(x.qty_per_label || 0) / 1000 : 0), 0)
   const scale = Math.min(1.8, 300 / w)
 
   return (
-    <Modal wide title={`${t('printLabels')} · ${t.pick(data.product)} · ${lot}`} onClose={onClose}>
+    <Modal wide title={`${pack ? t('packLabels') : t('printLabels')} · ${t.pick(data.product)} · ${lot}`} onClose={onClose}>
+      {pack && prevPacks.length > 0 && (
+        <div className="note-box short-box">
+          ⚠ {t('packedBefore', { n: prevPacks.length, l: prevLabels, kg: fmtNum(Math.round(prevKg * 10) / 10, t.lang) })}
+          <ul className="pack-history">{prevPacks.map(x => (
+            <li key={x.id}>{new Date(x.printed_at).toLocaleString(t.lang === 'zh' ? 'zh-CN' : t.lang === 'en' ? 'en-GB' : 'hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              {' · '}{packId(x.seq_from)}{x.seq_to > x.seq_from ? ` – P${String(x.seq_to).padStart(2, '0')}` : ''}
+              {' · '}{x.labels} × {fmtLabelQty(x.qty_per_label, x.unit)}{x.printed_by_name ? ` · ${x.printed_by_name}` : ''}{x.note ? ` · ${x.note}` : ''}</li>
+          ))}</ul>
+        </div>
+      )}
       <div className="label-layout">
         <div className="stack">
-          <Field label={t('labelTemplate')}>
+          {!pack && <Field label={t('labelTemplate')}>
             <select value={opt.template} onChange={e => set({ template: e.target.value })}>
               <option value="simple">{t('templateSimple')}</option>
               <option value="full">{t('templateFull')}</option>
             </select>
-          </Field>
+          </Field>}
           <Field label={t('labelSize')}>
             <select value={opt.size} onChange={e => set({ size: e.target.value })}>
               {LABEL_SIZES.map(s => <option key={s.id} value={s.id}>{s.custom ? t('customSize') : s.name}</option>)}
@@ -332,7 +359,8 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
               </div>
             </Field>
           </> : <label className="check-inline"><input type="checkbox" checked={opt.ingredients} onChange={e => set({ ingredients: e.target.checked })} />{t('showIngredients')}</label>}
-          <Field label={t('copies')} hint={copies > 1 ? t('copiesIdHint', { a: idFor(0), b: idFor(copies - 1) }) : null}><NumInput value={copies} min={1} max={200} onChange={v => setCopies(v)} /></Field>
+          <Field label={t('copies')} hint={copies > 1 || pack ? t('copiesIdHint', { a: idFor(0), b: idFor(Math.max(0, copies - 1)) }) : null}><NumInput value={copies} min={1} max={200} onChange={v => setCopies(v)} /></Field>
+          {pack && <Field label={t('packNote')}><input value={packNote} onChange={e => setPackNote(e.target.value)} placeholder={t('packNotePh')} /></Field>}
 
           {<details className="label-producer">
             <summary>{t('producerInfo')}{!settings.label_producer && <span className="tag tag-low">{t('missing')}</span>}</summary>
@@ -361,15 +389,15 @@ export default function LabelPrint({ batchId, sampleProductId, onClose }) {
       </div>
 
       <div className="modal-foot">
-        <button className="btn btn-quiet" disabled={!qr || !(copies > 0) || printing} onClick={() => setPrinting(true)}>{t('browserPrint')}</button>
+        {!pack && <button className="btn btn-quiet" disabled={!qr || !(copies > 0) || printing} onClick={() => setPrinting(true)}>{t('browserPrint')}</button>}
         {simple && (touch
-          ? <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={printSimple}>{t('sharePdf')}</button>
-          : <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={shareImages}>{t('shareImage')}</button>)}
+          ? <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={() => pack ? packPrint(printSimple) : printSimple()}>{t('sharePdf')}</button>
+          : <button className="btn btn-quiet" disabled={!(copies > 0)} onClick={() => pack ? packPrint(shareImages) : shareImages()}>{t('shareImage')}</button>)}
         {pdfUrl && <a className="btn btn-quiet" href={pdfUrl} target="_blank" rel="noreferrer">{t('openPdfAgain')}</a>}
         <span className="grow" />
         <button className="btn" onClick={onClose}>{t('close')}</button>
         {simple ? (
-          <button className="btn btn-primary" disabled={!(copies > 0)} onClick={touch ? shareImages : printSimple}>{t('print')} × {copies || 0}</button>
+          <button className="btn btn-primary" disabled={!(copies > 0) || (pack && packs.loading)} onClick={() => { const fn = touch ? shareImages : printSimple; pack ? packPrint(fn) : fn() }}>{t('print')} × {copies || 0}</button>
         ) : fullPdf ? (
           <button className="btn btn-primary" onClick={() => deliverPdf(fullPdf)}>{t('pdfReadyPrint')}</button>
         ) : (
@@ -407,7 +435,7 @@ export const labelFontsReady = () => Promise.all([
   'condensed 500 40px "Archivo Variable"', 'condensed 700 40px "Archivo Variable"',
 ].map(f => document.fonts?.load?.(f, 'ÁŐŰáőű0123') || Promise.resolve())).catch(() => {})
 
-function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId, showStorage, showProducer }) {
+function simpleLines({ product, batch, expiry, settings, lang, recorder, amount, unit, labelId, showStorage, showProducer, packedAt }) {
   const T = L[lang] || L.hu
   const produced = batch.done_at || batch.planned_date
   const useBy = addDays(produced, shelfDays(product, settings)) || expiry
@@ -416,6 +444,7 @@ function simpleLines({ product, batch, expiry, settings, lang, recorder, amount,
     { text: `${T.id}: ${labelId}` },
     recorder && { text: `${T.recorder}: ${recorder}` },
     { text: `${T.producedAt}: ${ymdhm(produced)}` },
+    packedAt && { text: `${T.packed}: ${ymd(packedAt)}` },
     useBy && { text: `${T.useBy}: ${ymdhm(useBy)}` },
     amount > 0 && { text: `${T.qty}: ${fmtLabelQty(amount, unit, T.units)}` },
     showStorage && product.storage && { text: `${T.storage}: ${product.storage}` },

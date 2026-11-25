@@ -108,6 +108,8 @@ textarea { resize: vertical; }
 .st-cancelled { background: transparent; color: var(--ink-3); text-decoration: line-through; }
 .tag { margin-left: 6px; background: var(--line-2); color: var(--ink-2); }
 .tag-low { background: var(--short-soft); color: var(--short); }
+.row-muted td { opacity: .55; }
+.pack-history { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
 .tag-internal { background: #E3ECF0; color: #2F5462; }
 .tag-wholesale { background: var(--kansui-soft); color: var(--kansui-ink); }
 

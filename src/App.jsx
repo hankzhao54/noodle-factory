@@ -29,6 +29,7 @@ import LegalPage from './legal/LegalPage'
 import Activity from './pages/Activity'
 import MonthlyReport from './pages/MonthlyReport'
 import Costs from './pages/Costs'
+import PackLabels from './pages/PackLabels'
 
 
 export default function App() {
@@ -93,7 +94,7 @@ function StaffShell() {
   useEffect(() => setOpen(false), [loc.pathname])
 
   const work = [
-    ['/', 'nav_dashboard'], ['/orders', 'nav_orders'], ['/production', 'nav_production'],
+    ['/', 'nav_dashboard'], ['/orders', 'nav_orders'], ['/production', 'nav_production'], ['/pack-labels', 'nav_packLabels'],
     ['/deliveries', 'nav_deliveries'], ['/inventory', 'nav_inventory'], ['/purchasing', 'nav_purchasing'], ['/reports', 'nav_reports'],
   ]
   const setup = [
@@ -130,6 +131,7 @@ function StaffShell() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/production" element={<Production />} />
+          <Route path="/pack-labels" element={<PackLabels />} />
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/purchasing" element={<Purchasing />} />

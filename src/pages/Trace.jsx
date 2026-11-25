@@ -23,12 +23,13 @@ export default function Trace() {
       q(db.from('recipe_lines').select('qty_per_batch, materials(id,name_zh,name_en,name_hu,unit,allergens)').eq('product_id', b.product_id)),
       q(db.from('stock_movements').select('*').eq('ref_id', b.id)),
     ])
+    const packs = await q(db.from('pack_labels').select('*').eq('batch_id', b.id).order('printed_at')).catch(() => [])
     // most recent received lots of each raw material before this batch was made
     const matIds = lines.map(l => l.materials?.id).filter(Boolean)
     const received = matIds.length ? await q(db.from('stock_movements').select('material_id,lot_no,expiry_date,created_at')
       .in('material_id', matIds).eq('reason', 'purchase').lte('created_at', b.done_at || new Date().toISOString())
       .order('created_at', { ascending: false }).limit(200)) : []
-    return { batch: b, product, lines, moves, received }
+    return { batch: b, product, lines, moves, received, packs }
   }, [lot])
 
   if (loading && !data) return <div className="page"><Loading /></div>
@@ -81,6 +82,12 @@ export default function Trace() {
         })}</tbody>
       </table></div>
       {!hasLotInfo && <p className="muted small" style={{ marginTop: 8 }}>{t('latestLotHint')}</p>}
+      {data.packs?.length > 0 && <>
+        <h2 className="trace-sub">{t('packHistory')}</h2>
+        <ul className="pack-history">{data.packs.map(x => (
+          <li key={x.id}>{new Date(x.printed_at).toLocaleString(t.lang === 'zh' ? 'zh-CN' : t.lang === 'en' ? 'en-GB' : 'hu-HU')} · {b.lot_no}/P{String(x.seq_from).padStart(2, '0')}{x.seq_to > x.seq_from ? `–P${String(x.seq_to).padStart(2, '0')}` : ''} · {x.labels} × {fmtNum(x.qty_per_label, t.lang)} {x.unit}{x.printed_by_name ? ` · ${x.printed_by_name}` : ''}{x.note ? ` · ${x.note}` : ''}</li>
+        ))}</ul>
+      </>}
       {printing && <LabelPrint batchId={b.id} onClose={() => setPrinting(false)} />}
     </div>
   )
