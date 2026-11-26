@@ -1,0 +1,344 @@
+/* 面坊 · Noodle Factory — "apple-design" layer
+ *
+ * Loaded after styles.css and only overrides it: every class name stays the same, so this
+ * file can be dropped to get the old look back. Grounded in Apple's HIG (via the
+ * apple-design skill): system type at platform sizes, semantic tokens with light + dark,
+ * 44 pt touch targets, grouped inset content, a floating glass tab bar, bottom sheets.
+ *
+ * Signature: kansui yellow — the colour of alkaline noodles — is the ONE accent. It marks
+ * "do this now": the primary button, the Labels tab, the selected place in the sidebar and
+ * things that need you. Everything else stays quiet flour-white / slate.
+ *
+ * Labels, delivery notes and invoices keep var(--font) (Archivo) and pure black on white:
+ * they are paper, not UI, and print the same as before.
+ */
+
+:root {
+  --ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+        'Helvetica Neue', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --ui-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI',
+        Roboto, 'Helvetica Neue', 'PingFang SC', 'Noto Sans SC', sans-serif;
+
+  /* light — every text colour ≥ 4.5:1 on both --panel and --bg */
+  --bg: #F2F1ED;          /* flour */
+  --panel: #FFFFFF;
+  --panel-2: #FFFFFF;     /* elevated: sheets, popovers */
+  --ink: #1A1F22;         /* 16.6:1 on white */
+  --ink-2: #4F575C;       /* 6.5:1 on --bg */
+  --ink-3: #686F74;       /* 5.1:1 on white, 4.5:1 on --bg (was #7C8A8F, 3.3:1) */
+  --on-ink: #FFFFFF;
+  --line: #D9D8D2;
+  --line-2: #E8E7E2;
+  --fill: rgba(118, 118, 128, 0.12);      /* iOS tertiary fill: inputs, quiet buttons */
+  --fill-2: rgba(118, 118, 128, 0.20);    /* pressed / selected */
+  --kansui: #E3B12C;                       /* ink on it: 8.4:1 */
+  --kansui-soft: #FBF0CF;
+  --kansui-ink: #6B4E00;                   /* 6.8:1 on soft */
+  --short: #B23A26;                        /* 6.0:1 on white */
+  --short-soft: #F9E3DE;
+  --ok: #2E7049;                           /* 5.0:1 on soft (was 4.3:1) */
+  --ok-soft: #E1F0E6;
+  --info: #2F5462;  --info-soft: #E3ECF0;
+  --violet: #4F3F75; --violet-soft: #ECE8F5;
+  --side: #ECEBE6;
+  --side-2: rgba(118, 118, 128, 0.14);
+  --glass: rgba(250, 249, 246, 0.72);
+  --glass-line: rgba(0, 0, 0, 0.08);
+  --shadow-float: 0 8px 30px rgba(26, 31, 34, 0.14), 0 1px 3px rgba(26, 31, 34, 0.08);
+  --shadow-card: 0 1px 2px rgba(26, 31, 34, 0.05);
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+  --tap: 36px;            /* pointer */
+  color-scheme: light dark;
+}
+@media (pointer: coarse) { :root { --tap: 44px; } }   /* layout.md / accessibility.md: 44 × 44 pt */
+
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F1113;
+    --panel: #1C1F22;
+    --panel-2: #26292D;
+    --ink: #F3F3F1;
+    --ink-2: #B9BEC2;     /* 8.8:1 */
+    --ink-3: #959BA0;     /* 5.9:1 */
+    --on-ink: #0F1113;
+    --line: #3A3E42;
+    --line-2: #2C3034;
+    --fill: rgba(120, 120, 128, 0.24);
+    --fill-2: rgba(120, 120, 128, 0.36);
+    --kansui: #F2C14E;
+    --kansui-soft: #3A2F12;
+    --kansui-ink: #F6D27A; /* 9.0:1 */
+    --short: #FF7A66;      /* 6.5:1 on panel */
+    --short-soft: #3D1F1A;
+    --ok: #5BCB8F;
+    --ok-soft: #17321F;
+    --info: #9CC3D3; --info-soft: #1E3440;
+    --violet: #C3B5EC; --violet-soft: #2D2645;
+    --side: #16191B;
+    --side-2: rgba(120, 120, 128, 0.22);
+    --glass: rgba(30, 33, 36, 0.72);
+    --glass-line: rgba(255, 255, 255, 0.10);
+    --shadow-float: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+    --shadow-card: none;
+  }
+}
+
+/* ---------- type: system font, iOS text styles ---------- */
+body { font-family: var(--ui); font-size: 15px; line-height: 1.45; letter-spacing: -0.005em;
+       -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+@media (max-width: 900px) { body { font-size: 17px; } }          /* typography.md: iOS Body 17 pt */
+button, input, select, textarea { font-family: var(--ui); }
+h1, h2, h3 { font-family: var(--ui-display); font-stretch: normal; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }  /* Headline */
+h3 { font-size: 15px; font-weight: 600; }
+@media (max-width: 900px) { h1 { font-size: 34px; line-height: 1.15; } }   /* Large Title */
+.small { font-size: 13px; }                                        /* Footnote */
+.mono-num, .todo-n, .label-card-lot { font-stretch: normal; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--kansui) 70%, transparent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--kansui) 40%, transparent); }
+code { background: var(--fill); }
+
+/* ---------- controls ---------- */
+input, select, textarea {
+  background: var(--fill); border: 1px solid transparent; border-radius: 10px;
+  min-height: var(--tap); padding: 8px 12px; color: var(--ink);
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus, textarea:focus { outline: none; background: var(--panel);
+  border-color: var(--kansui); box-shadow: 0 0 0 3px color-mix(in srgb, var(--kansui) 30%, transparent); }
+input:disabled, select:disabled { background: var(--line-2); color: var(--ink-3); }
+input::placeholder, textarea::placeholder { color: var(--ink-3); }
+input[type=checkbox], input[type=radio] { accent-color: var(--ink); min-height: 0; width: 20px; height: 20px; }
+.input-sm { min-height: 32px; border-radius: 8px; }
+@media (pointer: coarse) { .input-sm { min-height: 40px; } }
+.is-missing { border-color: var(--short); }
+select { -webkit-appearance: none; appearance: none; padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23868b8f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; }
+
+/* buttons: capsules; style — not size — marks the preferred one (buttons.md › Style) */
+.btn {
+  border: 0; background: var(--fill); color: var(--ink); border-radius: 999px;
+  min-height: var(--tap); padding: 8px 16px; font-weight: 600; letter-spacing: -0.01em;
+  transition: background .15s, transform .1s, filter .15s;
+}
+.btn:hover { background: var(--fill-2); border-color: transparent; }
+.btn:active:not(:disabled) { transform: scale(0.97); }                  /* buttons.md: always a press state */
+.btn-primary { background: var(--kansui); color: #1A1F22; }
+.btn-primary:hover { background: var(--kansui); filter: brightness(1.05); }
+.btn-primary:active:not(:disabled) { filter: brightness(0.94); }
+.btn-quiet { background: transparent; color: var(--ink-2); }
+.btn-quiet:hover { background: var(--fill); }
+.btn-danger { background: var(--short); color: #fff; }
+.btn-danger-quiet { background: transparent; color: var(--short); }
+.btn-danger-quiet:hover { background: var(--short-soft); }
+.btn-sm { min-height: 30px; padding: 4px 12px; font-size: 13px; }
+@media (pointer: coarse) { .btn-sm { min-height: 38px; padding: 6px 14px; font-size: 15px; } }
+.btn-big { min-height: 54px; font-size: 17px; border-radius: 16px; }
+.btn-icon { width: var(--tap); height: var(--tap); border-radius: 999px; color: var(--ink-2); display: inline-grid; place-items: center; }
+.btn-icon:hover { background: var(--fill); }
+.btn-link { color: var(--ink-2); text-decoration-color: var(--line); text-underline-offset: 3px; }
+.btn-link:hover { color: var(--ink); }
+.btn-link.on-dark { color: var(--ink-2); }
+
+.field-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.field-hint { font-size: 13px; color: var(--ink-3); }
+.check-inline, .inline-field, .check-line { color: var(--ink-2); }
+
+/* segmented controls: language switch + page tabs */
+.lang-switch, .lang-switch.on-dark { border: 0; background: var(--fill); border-radius: 9px; padding: 2px; gap: 2px; }
+.lang-switch button, .lang-switch.on-dark button { border-radius: 7px; padding: 4px 10px; font-size: 13px; color: var(--ink-2); }
+.lang-switch button.on, .lang-switch.on-dark button.on { background: var(--panel-2); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
+
+.tabs { display: inline-flex; max-width: 100%; border: 0; background: var(--fill); border-radius: 10px; padding: 2px; gap: 2px; margin: 6px 0 16px; }
+.tab { border: 0; border-radius: 8px; padding: 6px 14px; margin: 0; color: var(--ink-2); font-size: 14px; min-height: 32px; }
+.tab.on { background: var(--panel-2); color: var(--ink); border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
+
+/* chips, weekday picker */
+.chip, .day-picker .day { border: 0; background: var(--fill); color: var(--ink); min-height: 34px; padding: 6px 14px; }
+@media (pointer: coarse) { .chip, .day-picker .day { min-height: 40px; } }
+.chip.on, .day-picker .day.on { background: var(--ink); color: var(--on-ink); }
+.chip-urgent { background: var(--short-soft); color: var(--short); }
+.chip-urgent.on { background: var(--short); color: #fff; }
+.link-chip { border: 0; background: var(--fill); }
+.link-chip.current { background: var(--kansui-soft); color: var(--kansui-ink); }
+
+/* ---------- status / tags: tinted capsules ---------- */
+.status, .tag, .ac-tag { font-size: 12px; font-weight: 600; padding: 2px 9px; letter-spacing: 0; }
+.status, .tag, .ac-tag { background: var(--fill); color: var(--ink-2); }
+.st-submitted, .st-draft, .st-pending, .tag-wholesale, .load-chip, .note-inline { background: var(--kansui-soft); color: var(--kansui-ink); }
+.st-confirmed, .st-ordered, .st-planned, .st-out, .tag-internal { background: var(--info-soft); color: var(--info); }
+.st-ready, .tag-sample { background: var(--violet-soft); color: var(--violet); }
+.st-delivered, .st-received, .st-done, .tag-packed, .ac-insert { background: var(--ok-soft); color: var(--ok); }
+.tag-low, .tag-expired, .st-failed, .ac-delete { background: var(--short-soft); color: var(--short); }
+.tag-soon { background: var(--kansui-soft); color: var(--kansui-ink); }
+.tag-urgent, .ac-error { background: var(--short); color: #fff; }
+.st-cancelled { background: transparent; color: var(--ink-3); }
+
+.strand-track, .bar { background: var(--fill); }
+.strand-min { background: var(--ink-2); }
+
+/* ---------- shell: light sidebar on desktop (macOS source list) ---------- */
+.side { background: var(--side); color: var(--ink); border-right: 1px solid var(--line-2); }
+.brand { color: var(--ink); font-family: var(--ui-display); font-stretch: normal; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; padding: 22px 20px 10px; }
+.brand img { border-radius: 8px; }
+.nav-group { color: var(--ink-3); font-size: 12px; font-weight: 600; margin: 18px 10px 4px; letter-spacing: 0; }
+.side nav a { color: var(--ink); padding: 6px 10px; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+.side nav a:hover { background: var(--side-2); color: var(--ink); }
+.side nav a.active { background: var(--kansui-soft); color: var(--kansui-ink); font-weight: 600; }
+.side nav a.active::before { display: none; }
+.side-foot { border-top: 1px solid var(--line-2); }
+.who { color: var(--ink-2); }
+.page { padding: 32px 40px 72px; }
+.page-head { margin-bottom: 20px; }
+
+/* ---------- content: inset grouped cards, hairline separators ---------- */
+.panel, .table-wrap, .empty, .kpi, .stop-card, .label-card, .driver-stop, .install-hint,
+.qty-list, .history, .card-plain, .store-form, .to-receive-card, .todo-list a {
+  background: var(--panel); border: 0; border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}
+.panel { margin-bottom: 24px; }
+.panel .table-wrap { border-top: 1px solid var(--line-2); border-radius: 0 0 var(--r-lg) var(--r-lg); box-shadow: none; }
+.panel-head { padding: 14px 18px; }
+.panel .panel { box-shadow: none; }
+.subsection .table, .modal .table { border: 0; border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.empty { border: 0; color: var(--ink-3); padding: 32px 24px; }
+.notice, .error-box, .ok-box, .note-box, .short-box, .dash-warn { border-radius: var(--r); }
+.dash-warn { background: var(--short-soft); }
+.stop-card.is-done { background: var(--panel); opacity: .72; }
+.cust-panel, .lots-row > td, .driver-addr { background: var(--fill); border: 0; }
+.lots-table { background: var(--panel); }
+.thumb, .thumbs img { border: 0; border-radius: 10px; }
+.thumb-empty { background: var(--fill); border-radius: 10px; }
+.thumb-add { background: transparent; border: 1.5px dashed var(--line); border-radius: 10px; }
+.thumb-x { background: var(--ink); color: var(--on-ink); }
+.stepper button { border: 0; background: var(--fill); color: var(--ink); border-radius: 10px; width: var(--tap); height: var(--tap); }
+.stepper button:active:not(:disabled) { background: var(--fill-2); }
+.qty-list li { border-top-color: var(--line-2); }
+.qty-list li.has-qty { background: color-mix(in srgb, var(--kansui-soft) 60%, var(--panel)); box-shadow: inset 3px 0 0 var(--kansui); }
+.label-preview { box-shadow: var(--shadow-float); border-radius: 4px; }
+.label-producer { border: 0; background: var(--fill); border-radius: var(--r); }
+.sz-box { border: 0; background: var(--fill); }
+.sz-xml { background: var(--panel); }
+.day-chip { background: var(--fill); }
+.trace-lot { border-radius: 8px; }
+
+/* tables */
+.table th { background: transparent; color: var(--ink-3); font-size: 12px; font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
+.table td { padding: 11px 14px; border-bottom: 1px solid var(--line-2); }
+.table tfoot td { border-top: 1px solid var(--line); }
+.clickable:hover td, .activity-table .ac-row:hover td, .activity-table .ac-row.open td { background: var(--fill); }
+.clickable:active td { background: var(--fill-2); }
+@media (max-width: 640px) {
+  .table th:first-child { background: var(--panel); }
+  .table-wrap { background: var(--panel); }
+  .table-wrap:has(> .orders-table) { background: var(--panel); }
+  .orders-table tr { padding: 12px 16px; }
+}
+
+/* dashboard to-do: count in the accent only when it needs you */
+.todo-list { gap: 10px; }
+.todo-list a { border: 0; padding: 14px 18px; transition: transform .1s; }
+.todo-list a:hover { border: 0; background: color-mix(in srgb, var(--fill) 50%, var(--panel)); }
+.todo-list a:active { transform: scale(0.985); }
+.todo-n { font-family: var(--ui-display); font-weight: 700; font-size: 30px; letter-spacing: -0.02em; }
+.todo-list .urgent a { border: 0; }
+.todo-list .urgent .todo-n { color: var(--kansui-ink); }
+.todo-label small { color: var(--ink-3); }
+
+/* deliveries */
+.run-head { border-bottom: 1px solid var(--line); }
+.stop-items, .driver-lines { border-top-style: solid; border-top-color: var(--line-2); }
+.stop-items td, .driver-lines li, .need-list li, .history-body ul li { border-bottom-style: solid; border-bottom-color: var(--line-2); }
+.driver-n { background: var(--ink); color: var(--on-ink); }
+.driver-actions .btn { border-radius: 14px; }
+.label-card-actions .btn { border-radius: 14px; min-height: 50px; }
+.to-receive { border: 0; background: var(--kansui-soft); border-radius: var(--r-lg); }
+.pack-row { border-radius: var(--r); }
+
+/* ---------- sheets / dialogs (sheets.md, modality.md) ---------- */
+.modal-back { background: rgba(0, 0, 0, 0.32); }
+.modal { background: var(--panel-2); border-radius: 18px; box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+.modal-head { border-bottom: 0; padding: 18px 20px 6px; }
+.modal-head h2 { font-size: 20px; font-weight: 700; }
+.modal-head .btn-icon { width: 30px; height: 30px; background: var(--fill); font-size: 20px; color: var(--ink-2); }
+.modal-foot { border-top: 1px solid var(--line-2); }
+.subsection { border-top-color: var(--line-2); }
+@media (max-width: 900px) {
+  /* a bottom sheet with a grabber, not a full-screen takeover; the page stays visible above */
+  .modal-back { padding: 0; align-items: flex-end; }
+  .modal { border-radius: 16px 16px 0 0; min-height: 0; max-height: calc(100dvh - 24px); overflow-y: auto;
+           overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom); animation: sheet-in .28s cubic-bezier(.2,.8,.2,1); }
+  .modal::before { content: ''; display: block; width: 36px; height: 5px; border-radius: 3px; background: var(--fill-2); margin: 6px auto 0; }
+  .modal-head { position: sticky; top: 0; z-index: 2; background: var(--panel-2); padding-top: 8px; }
+}
+@keyframes sheet-in { from { transform: translateY(40px); opacity: .4; } }
+
+/* toast: a floating glass capsule */
+.toast { background: color-mix(in srgb, #1A1F22 88%, transparent); color: #fff; border-radius: 999px; padding: 11px 20px;
+         font-weight: 500; box-shadow: var(--shadow-float); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.toast-error { background: var(--short); color: #fff; }
+.idle-warning { background: var(--panel-2); border-radius: var(--r-lg); box-shadow: var(--shadow-float); }
+
+/* ---------- phone: glass top bar + floating tab bar (tab-bars.md › Phone) ---------- */
+@media (max-width: 900px) {
+  .side { background: var(--panel-2); box-shadow: var(--shadow-float); border-right: 0; }
+  .nav-open .scrim { background: rgba(0, 0, 0, 0.32); }
+  .topbar { background: var(--glass); color: var(--ink); border-bottom: .5px solid var(--glass-line);
+            -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+            padding: calc(6px + env(safe-area-inset-top)) 12px 6px; min-height: 50px; }
+  .topbar .btn-icon { color: var(--ink); }
+  .topbar-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .page { padding: 12px 16px 48px; }
+
+  .tabbar { left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom)); padding: 6px; border: 0;
+            border-radius: 30px; background: var(--glass); box-shadow: var(--shadow-float);
+            outline: .5px solid var(--glass-line);
+            -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
+  .tabbar a, .tabbar button { font: 600 11px var(--ui); color: var(--ink-3); border-radius: 22px; padding: 6px 0 5px; gap: 1px;
+            transition: background .2s, color .2s; }
+  .tabbar a svg, .tabbar button svg { width: 26px; height: 26px; }
+  .tabbar a.active, .tabbar button.active { color: var(--ink); background: var(--fill); }
+  .tabbar a:active, .tabbar button:active { background: var(--fill-2); }
+  /* the one loud thing: the Labels tab, in noodle yellow, sitting in the bar instead of above it */
+  .tabbar .tab-main svg { width: 44px; height: 30px; margin: 0; padding: 4px 9px; border-radius: 15px; background: var(--kansui); color: #1A1F22; box-shadow: none; }
+  .tabbar .tab-main { color: var(--ink); }
+  .tabbar .tab-main.active { background: transparent; }
+  .tabbar .tab-main.active svg { box-shadow: 0 0 0 3px color-mix(in srgb, var(--kansui) 35%, transparent); }
+  .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .cart-bar { background: var(--glass); border-top: .5px solid var(--glass-line);
+              -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
+}
+.cart-bar { border-top-color: var(--line-2); }
+
+/* Reduce Transparency / Increase Contrast have an answer (accessibility.md, materials.md) */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: var(--panel); }
+  .topbar, .tabbar, .cart-bar, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --ink-2: var(--ink); --ink-3: var(--ink-2); --line-2: var(--line); --glass: var(--panel); }
+  .panel, .table-wrap, .stop-card, .label-card, .kpi, .qty-list, .history, .todo-list a { outline: 1px solid var(--line); }
+}
+
+/* ---------- login ---------- */
+.login-art { background: #1A1F22; }
+.login-panel { background: var(--bg); }
+.login-form h1 { font-size: 34px; }
+.login-form input { min-height: 48px; }
+.login-form .btn { min-height: 50px; font-size: 17px; }
+
+/* ---------- customer portal ---------- */
+.portal-brand { font-family: var(--ui-display); font-stretch: normal; }
+.history-row { min-height: 52px; }
+
+/* ---------- paper stays paper ---------- */
+.label, .label-print, .dnote, .inv { font-family: var(--font); letter-spacing: normal; }
+@media print {
+  body { font-size: 15px; }
+  .panel, .table-wrap, .kpi { box-shadow: none; outline: 0; }
+}

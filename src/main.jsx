@@ -9,6 +9,7 @@ import '@fontsource/barlow-semi-condensed/700.css'
 import '@fontsource/roboto-condensed/500.css'
 import '@fontsource/roboto-condensed/700.css'
 import './styles.css'
+import './apple.css' // apple-design branch: HIG-based look on top of styles.css
 import { installErrorLogging } from './lib/errorLog'
 
 installErrorLogging()
