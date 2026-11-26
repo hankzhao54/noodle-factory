@@ -668,8 +668,9 @@ textarea { resize: vertical; }
 .label-card-lot { font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 17px; }
 .label-sub { font-size: 1rem; margin: 18px 0 0; }
 .btn-big { min-height: 52px; font-size: 17px; justify-content: center; }
-.label-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
-.label-card-actions .btn { min-height: 48px; font-size: 16px; justify-content: center; }
+.label-card { min-width: 0; }
+.label-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
+.label-card-actions .btn { flex: 1 1 150px; min-width: 0; min-height: 48px; font-size: 16px; justify-content: center; white-space: nowrap; }
 
 /* phone tab bar */
 .tabbar { display: none; }
