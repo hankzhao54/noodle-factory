@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom'
 import { configured, db, q } from './lib/supabase'
 import { useData } from './lib/useData'
@@ -7,29 +7,32 @@ import { LangContext, LANGS, useT } from './lib/i18n'
 import { ToastProvider, Loading } from './components/ui'
 import Login from './pages/Login'
 import RequestAccess from './pages/RequestAccess'
-import Dashboard from './pages/Dashboard'
-import Materials from './pages/Materials'
-import Suppliers from './pages/Suppliers'
-import Products from './pages/Products'
-import Purchasing from './pages/Purchasing'
-import Inventory from './pages/Inventory'
-import Production from './pages/Production'
-import Customers from './pages/Customers'
-import Orders from './pages/Orders'
-import Deliveries from './pages/Deliveries'
-import Users from './pages/Users'
-import Portal from './portal/Portal'
-import Trace from './pages/Trace'
-import LabelSettings from './pages/LabelSettings'
-import EmailSettings from './pages/EmailSettings'
-import RuleSettings from './pages/RuleSettings'
-import Reports from './pages/Reports'
-import PriceTiers from './pages/PriceTiers'
-import LegalPage from './legal/LegalPage'
-import Activity from './pages/Activity'
-import MonthlyReport from './pages/MonthlyReport'
-import Costs from './pages/Costs'
-import Labels from './pages/Labels'
+// Pages are loaded on demand (React.lazy) so the heavy libraries they pull in
+// (jspdf / exceljs / qrcode / html-to-image) are split into their own chunks
+// and only downloaded when the matching page is first opened.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Materials = lazy(() => import('./pages/Materials'))
+const Suppliers = lazy(() => import('./pages/Suppliers'))
+const Products = lazy(() => import('./pages/Products'))
+const Purchasing = lazy(() => import('./pages/Purchasing'))
+const Inventory = lazy(() => import('./pages/Inventory'))
+const Production = lazy(() => import('./pages/Production'))
+const Customers = lazy(() => import('./pages/Customers'))
+const Orders = lazy(() => import('./pages/Orders'))
+const Deliveries = lazy(() => import('./pages/Deliveries'))
+const Users = lazy(() => import('./pages/Users'))
+const Portal = lazy(() => import('./portal/Portal'))
+const Trace = lazy(() => import('./pages/Trace'))
+const LabelSettings = lazy(() => import('./pages/LabelSettings'))
+const EmailSettings = lazy(() => import('./pages/EmailSettings'))
+const RuleSettings = lazy(() => import('./pages/RuleSettings'))
+const Reports = lazy(() => import('./pages/Reports'))
+const PriceTiers = lazy(() => import('./pages/PriceTiers'))
+const LegalPage = lazy(() => import('./legal/LegalPage'))
+const Activity = lazy(() => import('./pages/Activity'))
+const MonthlyReport = lazy(() => import('./pages/MonthlyReport'))
+const Costs = lazy(() => import('./pages/Costs'))
+const Labels = lazy(() => import('./pages/Labels'))
 
 
 export default function App() {
@@ -46,11 +49,13 @@ export default function App() {
   return (
     <LangContext.Provider value={{ lang, setLang }}>
       <ToastProvider>
-        <Routes>
-          {/* legal pages are public: no sign-in needed */}
-          <Route path="/legal/:doc" element={<LegalPage />} />
-          <Route path="*" element={<AuthProvider><Gate /></AuthProvider>} />
-        </Routes>
+        <Suspense fallback={<div className="center-screen"><Loading /></div>}>
+          <Routes>
+            {/* legal pages are public: no sign-in needed */}
+            <Route path="/legal/:doc" element={<LegalPage />} />
+            <Route path="*" element={<AuthProvider><Gate /></AuthProvider>} />
+          </Routes>
+        </Suspense>
       </ToastProvider>
     </LangContext.Provider>
   )
@@ -137,6 +142,7 @@ function StaffShell() {
         <button type="button" className={open ? 'active' : ''} onClick={() => setOpen(o => !o)}><Icon d="M4 7h16M4 12h16M4 17h16" /><span>{t('tab_more')}</span></button>
       </nav>
       <main className="main">
+        <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/orders" element={<Orders />} />
@@ -163,6 +169,7 @@ function StaffShell() {
           <Route path="/costs" element={<Costs />} />{/* the page itself checks cost_viewers */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   )
