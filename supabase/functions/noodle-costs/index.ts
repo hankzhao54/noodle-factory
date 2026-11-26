@@ -10,17 +10,30 @@ const ANON = Deno.env.get('SUPABASE_ANON_KEY')!
 const BASE_URL = 'https://rwineoyuhzwqtarnzkpq.supabase.co'
 const BASE_KEY = 'sb_publishable_sIVZd8Z22IIWaOfpvwMRsA_3J6UkbjT' // publishable (public) key of 101base
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// Only the noodle front-end may call this from a browser. We reflect the request's Origin
+// back when it is on the allow-list, and send no CORS header otherwise.
+const ALLOWED_ORIGINS = [
+  'https://noodle.101bistro.hu',              // production (custom domain)
+  'https://noodle-factory-gamma.vercel.app',  // production (old Vercel address, still live)
+  'http://localhost:5173',                    // local dev (Vite)
+]
+const cors = (req: Request) => {
+  const base: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  }
+  const origin = req.headers.get('Origin')
+  if (origin && ALLOWED_ORIGINS.includes(origin)) base['Access-Control-Allow-Origin'] = origin
+  return base
 }
-const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 const noodle = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Accept-Profile': 'noodle' }
 const isDate = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 Deno.serve(async req => {
+  const CORS = cors(req)
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
 

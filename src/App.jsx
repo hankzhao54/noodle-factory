@@ -106,7 +106,7 @@ function StaffShell() {
   ]
   const setup = [
     ['/products', 'nav_products'], ['/materials', 'nav_materials'], ['/suppliers', 'nav_suppliers'],
-    ['/customers', 'nav_customers'], ['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(costViewer ? [['/costs', 'nav_costs']] : []), ...(isAdmin ? [['/monthly-report', 'nav_monthReport'], ['/users', 'nav_users'], ['/activity', 'nav_activity']] : []),
+    ['/customers', 'nav_customers'], ['/label-settings', 'nav_labelSettings'], ['/email-settings', 'nav_emailSettings'], ...(costViewer ? [['/costs', 'nav_costs']] : []), ...(isAdmin ? [['/price-tiers', 'nav_priceTiers'], ['/rules', 'nav_ruleSettings'], ['/monthly-report', 'nav_monthReport'], ['/users', 'nav_users'], ['/activity', 'nav_activity']] : []),
   ]
   return (
     <div className={`shell ${open ? 'nav-open' : ''}`}>
@@ -160,9 +160,9 @@ function StaffShell() {
           <Route path="/trace/:lot" element={<Trace />} />
           <Route path="/label-settings" element={<LabelSettings />} />
           <Route path="/email-settings" element={<EmailSettings />} />
-          <Route path="/rules" element={<RuleSettings />} />
+          {isAdmin && <Route path="/rules" element={<RuleSettings />} />}
           <Route path="/reports" element={<Reports />} />
-          <Route path="/price-tiers" element={<PriceTiers />} />
+          {isAdmin && <Route path="/price-tiers" element={<PriceTiers />} />}
           {isAdmin && <Route path="/users" element={<Users />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           {isAdmin && <Route path="/monthly-report" element={<MonthlyReport />} />}
